@@ -396,11 +396,38 @@ never serves as both input and validation for one model.
    vocabulary across years, so labels mean the same thing over time.
 
 ### 5.2 Pitfalls and rules
-- **Overlapping ACS 5-year windows are not independent.** Census explicitly
+- **Overlapping ACS 5-year windows are not independent.** The Census Bureau
   discourages comparing overlapping periods: the difference only reflects the
-  non-shared years. **Rule: build time series from non-overlapping 5-year periods**,
-  i.e. 2009–13, 2014–18, 2019–23 (and 2024–28 when released), plus the decennial
-  censuses 1990/2000/2010/2020 for long history. Do not difference annual PDB vintages.
+  non-shared years. Each 5-year estimate is roughly the mean of five annual values.
+  Adjacent vintages share about 80% of their sample, so the series is a lagged,
+  damped rolling average with strongly correlated errors: about 15 vintages carry
+  about 3 independent observations' worth of information. Use them in three layers
+  ("display yes, inference no"):
+  1. **Display layer: every vintage as published** (2005–09 … 2020–24, about 16
+     points). Plot each at its window midpoint with an MOE ribbon, labeled
+     "5-year rolling estimate".
+     - Inflate dollars to a common year (each vintage is in its end-year dollars).
+     - Harmonize 2010-tract vintages to 2020 tracts. **[verify]** which vintage
+       first used 2020 tracts.
+     - Flag 2016–20 for COVID-era collection problems.
+  2. **Annualized modeled layer** (for annual trajectories in visuals, and for
+     PECOTA comp paths):
+     - A per-tract state-space model (Kalman smoother). A latent annual process
+       (local linear trend) is observed through 5-year averaging, with observation
+       errors correlated by window overlap (approximately the overlap fraction;
+       the Census Bureau does not publish the covariance) and MOE-derived variances.
+     - **Annual anchors:** county/place ACS 1-year (populations ≥ 65k),
+       Population Estimates Program, decennial 2010/2020, and tract-level annual
+       administrative series (LODES, HMDA, USPS vacancy, FHFA tract HPI
+       **[verify]**, IRS SOI by ZIP).
+     - Output is annual estimates with uncertainty bands, labeled "modeled".
+     - **Validation:** aggregate modeled tracts in large counties and compare
+       against the held-out published county 1-year ACS.
+  3. **Inference layer.** Change tests, trajectory clustering, and backtests use
+     **non-overlapping windows** (2009–13, 2014–18, 2019–23, then 2024–28), or the
+     layer-2 model with the overlap covariance built in. They never treat raw
+     overlapping vintages as independent observations. Decennial 1990/2000/2010/2020
+     supplies long history. Do not difference annual PDB vintages directly.
 - **Boundary changes.** Tracts are redrawn every decade. Options, in order of preference:
   1. Census **2010↔2020 tract relationship files**, weighted by 2020 block population,
      for the 2010s → 2020 geography.
@@ -424,7 +451,7 @@ never serves as both input and validation for one model.
 | **Markov / spatial-Markov transitions** (`giddy`) | Transition probabilities between cohorts, conditioned on neighbors' cohort | "What do tracts like this usually become?" |
 | **Change-vector features** (Δ domain scores between periods) | Appended to similarity features | The cheapest way to add trajectory to kNN. |
 | **Sequence analysis** (optimal matching → clustering; TraMineR via R or Python ports) | Trajectory typology (Delmelle) | Requires sensitivity analysis (§4.6). |
-| **Multivariate time-series similarity** (DTW on domain scores) | Trajectory-aware kNN | With only 3–5 periods, plain Euclidean on the stacked vectors is usually enough. |
+| **Multivariate time-series similarity** (DTW on domain scores) | Trajectory-aware kNN | On non-overlapping periods (3–5 points), plain Euclidean on stacked vectors is enough. DTW/shape matching becomes worthwhile on the layer-2 annualized series (§5.2), but report it with the modeled uncertainty. |
 | **Higher-frequency non-ACS series** (annual LODES, HMDA, USPS vacancy quarterly, IRS SOI by ZIP, Zillow monthly, 311) | Recent-momentum features | Genuinely independent annual data. Good for detecting change *since* the last ACS window. |
 
 ## 6. Supplemental sources that add independent signal for clustering

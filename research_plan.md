@@ -45,11 +45,23 @@ maps.
 - Results come with a facet × match heatmap explanation.
 
 ### R1.3 Panel construction (needed by R2, started here)
-- Non-overlapping ACS 5-year periods 2009–13, 2014–18, 2019–23, harmonized to 2020
-  tracts (Census relationship files, weighted by 2020 block population).
-- Decennial 2000 and 2010 (plus NHGIS 1990) for the "core temporal" preset.
-- Optionally LTDB 1970–2020 on 2010 tracts for long histories.
-- Dollars are CPI-adjusted. Store each period's MOEs.
+Three layers (methodology.md §5.2, "display yes, inference no"):
+1. **Display: every ACS 5-year vintage** 2005–09 … 2020–24 (about 16 points per
+   tract), harmonized to 2020 tracts (Census relationship files, weighted by 2020
+   block population). Dollars are CPI-adjusted to a common year, MOEs are stored,
+   and 2016–20 is flagged for COVID collection issues. Plotted at window midpoints
+   and labeled "5-year rolling".
+2. **Annualized modeled series.**
+   - A state-space smoother per tract and headline indicator, observed through
+     5-year averaging with overlap-correlated errors.
+   - Anchored by county/place 1-year ACS, Population Estimates Program, decennial
+     counts, and annual tract administrative series (LODES, HMDA, USPS vacancy,
+     FHFA tract HPI, IRS SOI by ZIP).
+   - Validated against held-out county 1-year ACS.
+   - Stored as `panel/tract_annual_modeled.parquet` with uncertainty bands.
+3. **Inference: non-overlapping windows** 2009–13, 2014–18, 2019–23, plus decennial
+   1990/2000/2010/2020 for the "core temporal" preset, and optionally LTDB
+   1970–2020 for long histories.
 
 ### R1 exit criteria
 - Validation battery v1 passes: methodology.md §4.1–4.4, plus the §4.4b 311 checks
@@ -57,6 +69,8 @@ maps.
 - Facet cohorts are named and reviewed.
 - The find-similar query returns in under 1 s nationally.
 - The harmonized panel is built, and its row counts and spot checks are documented.
+- The modeled annual series passes the county 1-year holdout check (80% intervals
+  cover 75–85% of held-out county values).
 
 ---
 
@@ -74,7 +88,7 @@ audience. That communication model is what we want to copy.
 
 | PECOTA element | What it does in baseball | Tract analogue |
 |---|---|---|
-| **Player** / **season** | Unit / time step | Tract / non-overlapping ACS period (decennial points for long history) |
+| **Player** / **season** | Unit / time step | Tract / **annual "seasons" for display** (the modeled annual series, plus raw rolling vintages). The **forecast step is a non-overlapping 5-year window** (decennial points for long history). |
 | **Age** and **aging curves** | Players peak and decline on typical curves | **Neighborhood life cycle** (Hoover & Vernon's stages: development → transition → downgrading → thinning → renewal). Proxies: median year built, years since the tract's population took off, housing-stock turnover. Life-cycle curves are the "aging curves". |
 | **Position, body type** | Constrain comparable careers | **Facet signature** (urbanity, housing-stock type, metro type and size), used as hard or soft match constraints |
 | **League and park translations** (Davenport) | Put stats from different contexts on one scale | **Regional translation.** Deflate dollars by BEA regional price parities. Express key stats as **metro-relative percentiles**, so a Cleveland tract can comp to a Seattle tract in relative terms. |
@@ -114,6 +128,15 @@ audience. That communication model is what we want to copy.
   - Forecasts of 2019–23 are scored against the actual 2019–23 values.
 - **Second fold**, where long history allows: comps from 1990→2000 forecast
   2000→2010. Use the core temporal variables only.
+- **Anti-leakage rule (overlapping vintages).**
+  - The forecast target is always the **next non-overlapping window** (five years
+    ahead), never an adjacent overlapping vintage. Predicting 2015–19 from 2014–18
+    is nearly free, because the two share 4 of 5 years of sample.
+  - Predictors may use only vintages **published by the as-of date**, including
+    the annualized-model fit on those vintages only (re-fit per as-of date; no
+    smoothing with future data).
+  - Annual points between the as-of window and the target appear in graphics only.
+    They are not scored as separate forecasts.
 - **Point accuracy:** MAE/RMSE per indicator vs Tract-Marcel, linear regression,
   gradient boosting (a supervised ML benchmark), and the R1 cohort Markov model
   (transition probabilities between k-means cohorts).
@@ -145,6 +168,11 @@ audience. That communication model is what we want to copy.
 2. **Comp trajectory "spaghetti" plot.** The target's history as a bold line. Each
    comp's path is aligned at the match point (like age-aligned careers), with
    opacity set by similarity, and a weighted fan of 10–90% bands over it.
+   - Lines use the **annualized modeled series**, with raw 5-year rolling vintages
+     as faint dots at window midpoints.
+   - The forecast fan is anchored at the non-overlapping 5-year horizon.
+   - Intermediate years are interpolated from comps' annual paths and visibly
+     styled as modeled.
 3. **Life-cycle ("aging") curves:** typical change by life-cycle stage and urbanity,
    with the target's position marked.
 4. **Comp map:** a national map of comps colored by similarity, with an inset of
