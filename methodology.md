@@ -413,6 +413,12 @@ feed *scoped* similarity, which runs within one city or region.
 
 ## 7. Experiment plan (Phase 3 of requirements.md)
 
+> The wider backlog of candidate methods is in
+> [`methodology_alternatives.md`](methodology_alternatives.md). It covers
+> dimensionality reduction (PCA/FA/MDS/Isomap/LLE/NMF/…), out-of-domain
+> approaches from sports, business, biology and physics, input-perturbation
+> experiments, and consensus clustering, each with an `ALT-xx` id.
+
 1. **E0 Baseline.** PDB-only, rates, equal domain weights, per-domain PCA → k-means
    (k = 6…16). Run the full validation battery. This is the reference point.
 2. **E1 Variable sets.** Race-included vs race-excluded, with vs without
