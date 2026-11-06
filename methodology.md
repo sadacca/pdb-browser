@@ -2,7 +2,8 @@
 
 > **Status:** Research draft v0.1 (2026-11-06). This is the companion to `requirements.md` §6
 > (profile and similarity). It reviews prior art, recommends a v1 approach, and
-> defines how we will know the cohorts are any good. Items marked **[verify]**
+> defines how we will know the cohorts are any good. Fact checks are logged in
+> [`verification_log.md`](verification_log.md) (`V-xx` ids). Items marked **[verify]**
 > were found in search summaries but not yet read in full.
 
 ## 0. Problem framing
@@ -34,7 +35,7 @@
 | Work | Unit / scale | Method | What we take from it |
 |---|---|---|---|
 | **Spielman & Singleton (2015)**, *Annals AAG*, "Studying neighborhoods using uncertain data from the ACS". Open US tract classification (Liverpool / ICPSR 100235). | All US tracts, ACS 2006–10 | Multivariate geodemographic typology framed as the *answer* to ACS MOEs: composite profiles are more reliable than single variables. Variables organized as Concepts → Domains → Measures. | The core argument for this project. An open, reproducible US precedent and a structure for variable domains. Their uncertainty treatment (assignment confidence) is reused in §4.3. |
-| **UK Output Area Classification 2011 / 2021** (Gale et al. 2016; Wyszomierski et al. 2024, GeoDS + ONS) | About 189k–232k output areas | Domain-balanced variable selection that drops highly correlated pairs. Transform (IHS/log) → range standardize → **k-means**, hierarchical by re-clustering within each parent (supergroup → group → subgroup). Pen portraits for labels. Open code and specs. | The most transparent end-to-end recipe: variable selection, transforms, nested k-means, labeling. Liverpool also published a **PCA-based automated variable selection** framework. |
+| **UK Output Area Classification 2011 / 2021** (Gale et al. 2016; Wyszomierski et al., *Geographical Journal*, GeoDS + ONS) | About 189k–232k output areas | Domain-balanced variable selection that drops highly correlated pairs. Transform (IHS/log) → range standardize → **k-means**, hierarchical by re-clustering within each parent (supergroup → group → subgroup). Pen portraits for labels. Open code and specs. | The most transparent end-to-end recipe: variable selection, transforms, nested k-means, labeling. Liverpool also published a **PCA-based automated variable selection** framework. |
 | **Esri Tapestry (2025 overhaul; 2026 vintage)** | US block groups and tracts | k-means with Euclidean distance, multistage seeding (not random). 60 segments in 12 LifeMode groups, plus an explicit **"unclassified"** segment. | Proprietary, but the published methodology confirms that k-means with good seeding is still the industry standard. The "unclassified" bin for outliers is worth copying. |
 | Claritas PRIZM, Experian Mosaic | Household / BG | Proprietary, consumer-data enhanced | Benchmark only. They show the value of non-census (behavioral) inputs. |
 | **Kolak et al. (2020)**, *JAMA Netw Open*, SDOH typology | 71,901 tracts | Dimension reduction → **4 indices** (advantage, isolation, opportunity, immigrant cohesion; 71% of variance) → **k-means → 7 types**. Externally validated against premature mortality (Chicago, spatial regression). | A two-stage *reduce then cluster* design that yields interpretable axes. A model for external validation. Public data at SDOHAtlas.github.io. |
@@ -46,7 +47,7 @@
 | **CDC/ATSDR SVI** | 4 themes, percentile-ranked, tract level. Useful benchmark and covariate. |
 | **Area Deprivation Index** (Singh; UW Neighborhood Atlas) | BG-level deprivation. A benchmark. |
 | **Child Opportunity Index 3.0** (diversitydatakids) | 44 indicators, 3 domains, 14 subdomains. Built at **block** level and aggregated up. Weights come from **how well each indicator predicts intergenerational-mobility outcomes**. This is the main precedent for *outcome-informed weighting* (§3.4). |
-| Census Community Resilience Estimates | Small-area estimation. Reportedly removed from census.gov in 2025 **[verify]**. |
+| Census Community Resilience Estimates | Small-area estimation. **Still published:** the 2024 CRE was released 2026-01-29. Only the *Equity Supplement* is listed as discontinued (V-07). |
 | USDA RUCA / NCHS urban-rural | Urbanicity strata (§3.6). |
 
 ### 1.3 Neighborhood change and trajectories
@@ -61,12 +62,15 @@
 ### 1.4 Representation learning
 - **Autoencoders vs PCA on census data.** A 2026 study on 408 variables × 188,880
   England & Wales output areas reports **about 19% lower reconstruction error than PCA** at
-  operational dimensionality **[verify]**. Tooling: `DeepGeoDemo` (YAML-driven
+  operational dimensionality (Liverpool/Leicester conference paper, Zenodo 2026-04-04;
+  abstract-level check only, peer-review status unknown, V-08). Tooling: `DeepGeoDemo` (YAML-driven
   deep-embedding geodemographics).
 - **Imagery-derived context.** Singleton's convolutional autoencoder on Sentinel-2
   produced a 7-group "Postcode Context Classification" of Great Britain. Pre-trained CNN
   features (ResNet → PCA) and **global satellite embedding datasets** (for example
-  Google's annual 64-dim AlphaEarth embeddings in Earth Engine **[verify]**) give
+  Google DeepMind's AlphaEarth Foundations: 64-dim, 10 m, annual layers 2017–2024 in
+  Earth Engine as `GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL`, V-06; check the license
+  before redistributing derivatives) give
   per-pixel built-environment vectors that can be mean-pooled to tracts.
 - **Assessment.** Learned embeddings help *similarity search* and can add
   built-form signal that census data lacks. They hurt *interpretability* of named
@@ -407,9 +411,13 @@ never serves as both input and validation for one model.
      points). Plot each at its window midpoint with an MOE ribbon, labeled
      "5-year rolling estimate".
      - Inflate dollars to a common year (each vintage is in its end-year dollars).
-     - Harmonize 2010-tract vintages to 2020 tracts. **[verify]** which vintage
-       first used 2020 tracts.
-     - Flag 2016–20 for COVID-era collection problems.
+     - **Boundary vintages (V-01, verified):** 5-year releases 2005–09 … 2015–19
+       (11 vintages) are on **2010 tracts**. **2016–20 (released 2022-03-17) was the
+       first on 2020 tracts**, and every later release is too. Harmonize the 11 older
+       vintages with the Census relationship files or the NHGIS 2010→2020 crosswalks.
+     - 2016–20 was published with standard methodology (the Census Bureau judged
+       the 2020 disruption much smaller over 5 years). Keep a soft COVID-era flag on
+       2016–20 and 2017–21 only.
   2. **Annualized modeled layer** (for annual trajectories in visuals, and for
      PECOTA comp paths):
      - A per-tract state-space model (Kalman smoother). A latent annual process
@@ -418,8 +426,20 @@ never serves as both input and validation for one model.
        the Census Bureau does not publish the covariance) and MOE-derived variances.
      - **Annual anchors:** county/place ACS 1-year (populations ≥ 65k),
        Population Estimates Program, decennial 2010/2020, and tract-level annual
-       administrative series (LODES, HMDA, USPS vacancy, FHFA tract HPI
-       **[verify]**, IRS SOI by ZIP).
+       administrative series.
+       - **ACS 1-year 2020 gap (V-09):** standard 2020 1-year products were never
+         published. Only 54 experimental tables exist, at national and state level
+         only. The model must treat 2020 as a missing anchor year.
+       - **Tract series:** LODES 8 (2020 blocks, 2002–2022 for most states, V-10) and
+         HMDA.
+       - **FHFA annual tract HPI** (V-02): verified to exist but *developmental*.
+         The research release covers about 63k **2010** tracts for 1989–2021, so it
+         needs a crosswalk and has coverage gaps, and the current file vintage is
+         unconfirmed.
+       - IRS SOI by ZIP, via the HUD crosswalk.
+       - **USPS vacancy (V-04):** access is restricted to registered government and
+         nonprofit users. Use it only if the project qualifies, as an internal model
+         input, and never redistribute it in the public app.
      - Output is annual estimates with uncertainty bands, labeled "modeled".
      - **Validation:** aggregate modeled tracts in large counties and compare
        against the held-out published county 1-year ACS.
@@ -452,7 +472,7 @@ never serves as both input and validation for one model.
 | **Change-vector features** (Δ domain scores between periods) | Appended to similarity features | The cheapest way to add trajectory to kNN. |
 | **Sequence analysis** (optimal matching → clustering; TraMineR via R or Python ports) | Trajectory typology (Delmelle) | Requires sensitivity analysis (§4.6). |
 | **Multivariate time-series similarity** (DTW on domain scores) | Trajectory-aware kNN | On non-overlapping periods (3–5 points), plain Euclidean on stacked vectors is enough. DTW/shape matching becomes worthwhile on the layer-2 annualized series (§5.2), but report it with the modeled uncertainty. |
-| **Higher-frequency non-ACS series** (annual LODES, HMDA, USPS vacancy quarterly, IRS SOI by ZIP, Zillow monthly, 311) | Recent-momentum features | Genuinely independent annual data. Good for detecting change *since* the last ACS window. |
+| **Higher-frequency non-ACS series** (annual LODES, HMDA, FHFA tract HPI, IRS SOI by ZIP, Zillow monthly, 311; USPS vacancy only if eligible, V-04) | Recent-momentum features | Genuinely independent annual data. Good for detecting change *since* the last ACS window. |
 
 ## 6. Supplemental sources that add independent signal for clustering
 
@@ -462,13 +482,13 @@ and race.
 | Signal | Source | Join (requirements §5.2) | Why it helps |
 |---|---|---|---|
 | Built form and land use | NLCD land cover / impervious surface / tree canopy. Overture/Microsoft building footprints (count, size, density). EPA Smart Location DB. | raster zonal stats / point-in-polygon / direct BG | Separates dense-old-urban from new-dense-suburban areas, which demographics alone conflate |
-| Satellite or learned embeddings | Global annual satellite embeddings (e.g. AlphaEarth **[verify]**), Sentinel-2 CNN features | zonal mean → tract | Dense built-environment signal. An optional block for similarity, with low interpretability. |
+| Satellite or learned embeddings | Global annual satellite embeddings (AlphaEarth, verified: 64-dim, 10 m, 2017–2024, V-06), Sentinel-2 CNN features | zonal mean → tract | Dense built-environment signal. An optional block for similarity, with low interpretability. |
 | Amenities | Overture / OSM POIs: grocery, pharmacy, schools, transit stops, bars, places of worship | point-in-polygon → per-capita and access | "Lived environment". Overture is CDLA, OSM is ODbL. |
 | Jobs and functional ties | **LEHD LODES** (workplace jobs by sector; origin-destination flows) | block → tract | Workplace character. **Flow-graph embeddings** (node2vec on commute flows) give *relational* similarity: places that play the same role in their metro. |
 | Health outcomes | CDC PLACES, USALEEP | direct | Better held out for validation than used as inputs (§4.4). |
 | Economic mobility | Opportunity Atlas | direct (2010 tracts → crosswalk) | Same: validation, or the outcome-weighted preset. |
-| Housing market | HMDA, FHFA, Zillow (license), USPS vacancy | direct / crosswalk | Market momentum and investment flows. |
-| Hazard and environment | FEMA NRI, EJ indices, flood zones | direct / areal | Exposure dimension. |
+| Housing market | HMDA, FHFA tract HPI (developmental), Zillow (license), USPS vacancy (restricted, V-04) | direct / crosswalk | Market momentum and investment flows. |
+| Hazard and environment | FEMA NRI, EJ indices (EJScreen archived copy, V-05), flood zones | direct / areal | Exposure dimension. |
 | Municipal operations | 311, code enforcement, permits (balt311 adapters) | point-in-polygon | **Validation only** for the national typology (within-city procedure in §4.4b). Optional input only for scoped within-city similarity, which is then validated on other outcomes. |
 
 **Coverage rule:** a feature enters the *national* typology only if it covers
@@ -530,7 +550,7 @@ and comparable.
 - Spielman & Singleton (2015), *Annals AAG* 105(5):1003–1025. Open classification:
   [ICPSR 100235](https://www.openicpsr.org/openicpsr/project/100235/version/V5/view),
   [Liverpool project page](https://liverpool.ac.uk/geographic-data-science/research/understandingthemorphologyofcities/north-american-geodemographics).
-- Wyszomierski et al. (2024), 2021/22 UK OAC:
+- Wyszomierski et al. (*Geographical Journal*; sources disagree on 2023 vs 2024), 2021/22 UK OAC:
   [paper](https://livrepository.liverpool.ac.uk/3177556/),
   [GeoDS dataset](https://data.geods.ac.uk/dataset/uk-oac),
   [ONS page](https://www.ons.gov.uk/methodology/geography/geographicalproducts/areaclassifications/2021and2022residentialbasedareaclassifications);
@@ -555,5 +575,5 @@ and comparable.
 - Hennig (2007, 2008), cluster stability:
   [fpc::clusterboot](https://search.r-project.org/CRAN/refmans/fpc/html/clusterboot.html).
 - Deep geodemographics: [DeepGeoDemo](https://deepgeodemo.readthedocs.io/);
-  [autoencoder vs PCA, E&W OAs](https://zenodo.org/records/19420685) **[verify]**;
+  [autoencoder vs PCA, E&W OAs](https://zenodo.org/records/19420685) (conference paper, abstract verified);
   [Geodemographics from satellite images](https://aag.secure-platform.com/aag2023/solicitations/39/sessiongallery/5942/application/21363).

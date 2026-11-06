@@ -47,16 +47,24 @@ maps.
 ### R1.3 Panel construction (needed by R2, started here)
 Three layers (methodology.md §5.2, "display yes, inference no"):
 1. **Display: every ACS 5-year vintage** 2005–09 … 2020–24 (about 16 points per
-   tract), harmonized to 2020 tracts (Census relationship files, weighted by 2020
-   block population). Dollars are CPI-adjusted to a common year, MOEs are stored,
-   and 2016–20 is flagged for COVID collection issues. Plotted at window midpoints
+   tract). The 11 vintages 2005–09 … 2015–19 are on 2010 tracts and are harmonized
+   to 2020 tracts (Census relationship files weighted by 2020 block population, or
+   NHGIS crosswalks). From 2016–20 onward, vintages are natively on 2020 tracts
+   (V-01). Dollars are CPI-adjusted to a common year, MOEs are stored, and 2016–20
+   and 2017–21 get a soft COVID-era flag. Plotted at window midpoints
    and labeled "5-year rolling".
 2. **Annualized modeled series.**
    - A state-space smoother per tract and headline indicator, observed through
      5-year averaging with overlap-correlated errors.
-   - Anchored by county/place 1-year ACS, Population Estimates Program, decennial
-     counts, and annual tract administrative series (LODES, HMDA, USPS vacancy,
-     FHFA tract HPI, IRS SOI by ZIP).
+   - Anchored by county/place 1-year ACS (no standard 2020 release: a missing
+     anchor year, V-09), Population Estimates Program, decennial counts, and annual
+     tract administrative series:
+     - LODES 8 (2002–2022);
+     - HMDA;
+     - FHFA tract HPI (developmental, 2010 tracts, V-02);
+     - IRS SOI by ZIP;
+     - USPS vacancy, only if the project is eligible for restricted access, and
+       never published (V-04).
    - Validated against held-out county 1-year ACS.
    - Stored as `panel/tract_annual_modeled.parquet` with uncertainty bands.
 3. **Inference: non-overlapping windows** 2009–13, 2014–18, 2019–23, plus decennial

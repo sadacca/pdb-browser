@@ -35,16 +35,26 @@ Audiences:
 ## 3. Core data: Census Planning Database
 
 ### 3.1 Vintages
-- **Required:** latest PDB at time of build. The **2025 PDB** (2019–2023 ACS 5-year
-  estimates, 2020 Census geographies, Low Response Score, self-response rates) is
-  confirmed. The Census developer page also lists a **2026** vintage. The pipeline
-  must take `--vintage` and resolve URLs and variable suffixes (`_ACS_19_23`, …)
-  from it, never hard-coding them.
+- **Required:** latest PDB at time of build. **Target the 2026 PDB.** Its Census
+  API dataset page confirms 2020–2024 ACS 5-year estimates, tract self-response
+  rates, 2020 Census operational variables and the LRS (endpoint
+  `api.census.gov/data/2026/pdb/tract`). The 2025 PDB (2019–2023 ACS) is the
+  fallback.
+  - The CSV filename (`pdb2026tr.csv`?) is unconfirmed until the Phase 0 spike.
+  - **Vintage label ≠ release year ≠ ACS period:** the 2024 PDB (2018–22 ACS) was
+    only released 2026-01-22. The pipeline must take `--vintage` and read the ACS
+    period and variable suffixes (`_ACS_20_24`, …) from metadata, never hard-coding
+    them.
+  - Verify the row and column count of each download. Example: the 2023 tract file
+    should be 85,395 rows × 524 columns.
+  - See `verification_log.md` V-03.
 - **Should:** keep at least two vintages so users can see changes over time. Variable names change
   suffix per vintage, so the pipeline normalizes to a **stable variable key**
   (`med_hhd_inc_acs`) plus a `vintage` and `acs_period` column.
-- **Won't (v1):** 2010-geography PDBs (pre-2022). These need the 2010→2020 tract
-  relationship file; defer to a later phase.
+- **Won't (v1):** 2010-geography PDBs. These are the vintages built on 2015–19 or
+  earlier ACS, i.e. through the 2021 PDB; the ACS switched to 2020 tracts with
+  2016–20, per V-01. They need the 2010→2020 tract relationship file; defer to a
+  later phase.
 
 ### 3.2 Sources
 | File | Grain | Approx size |
@@ -62,7 +72,10 @@ Audiences:
   source (ACS/Census/derived), unit (count / percent / dollars / score),
   `has_moe`, and a denominator variable for counts. Every UI label comes from here.
 - **R-PDB-3.** Pair each count with its percent, and each estimate with its MOE where the PDB
-  provides one. Surface the **coefficient of variation** and flag
+  provides one. **Unverified:** whether the PDB ships a MOE column for every ACS
+  variable (its documentation has an MOE-calculation appendix). If not, fetch
+  MOEs for clustering variables from the ACS detailed-table API. This is a Phase 0
+  spike check (V-14). Surface the **coefficient of variation** and flag
   unreliable estimates (CV > 30% amber, > 50% red) in the profile view.
 - **R-PDB-4.** Topic groups for browsing: Population & age; Race/ethnicity;
   Language & nativity; Education; Income & poverty; Employment; Housing &
@@ -126,7 +139,7 @@ refresh: annual
 | `direct` | Already keyed by 2020 tract/BG GEOID | Left join on GEOID. Report the match rate. |
 | `point_in_polygon` | Events/facilities: 311, crime, permits, code violations, schools, clinics | `geopandas.sjoin(predicate="within")`, then aggregate (count, rate per 1k pop, median, share by category). Reuse balt311's ingest-then-aggregate pattern and n<5 suppression. |
 | `areal_interpolation` | Polygons not aligned to tracts: school districts, flood zones, zoning, parks, BNIA CSAs, council districts | Area-weighted by default. **Population-weighted via 2020 blocks** when the variable is people-based (dasymetric). Use `tobler` or an equivalent. |
-| `crosswalk` | ZIP/ZCTA, county, place, 2010 tracts | HUD USPS ZIP crosswalk (residential ratio). Census 2010→2020 tract relationship file. Population-weighted. |
+| `crosswalk` | ZIP/ZCTA, county, place, 2010 tracts | HUD USPS ZIP crosswalk (residential ratio; free with registration / API key; 2020 tracts from 2023 Q1 onward). Census 2010→2020 tract relationship file. Population-weighted. |
 | `broadcast` | County/state/metro-level values (unemployment rate, state policy flags) | Copy the parent value to every child tract, marked `granularity=county` in the UI. |
 
 - **R-JOIN-1.** Every join writes a **join report**: rows in, rows matched, unmatched
@@ -148,14 +161,15 @@ refresh: annual
 | Source | Geography | Adds |
 |---|---|---|
 | ACS 5-year API (newer than the PDB's vintage) | tract/BG | Fresher estimates and any table the PDB omits (e.g. B25070 rent burden, B08303 commute time) |
-| CDC **PLACES** | tract | Model-based health outcomes (diabetes, asthma, obesity, depression, …) |
+| CDC **PLACES** (2025 release confirmed available: 40 measures, 2023 BRFSS) | tract | Model-based health outcomes (diabetes, asthma, obesity, depression, …) |
 | CDC/ATSDR **Social Vulnerability Index** | tract | SVI themes and percentiles |
 | FEMA **National Risk Index** | tract | Hazard risk, expected annual loss, resilience |
-| EPA **EJScreen** indexes (archived 2024 data where retired) / CEQ CEJST | tract/BG | Environmental burden (PM2.5, diesel, proximity to hazards) |
+| EPA **EJScreen** (**removed by EPA 2025-02-05**; use the Public Environmental Data Partners reconstruction or another archived copy, labeled historical) / CEQ CEJST | tract/BG | Environmental burden (PM2.5, diesel, proximity to hazards) |
 | USDA **Food Access Research Atlas** | tract | Low-income / low-access flags |
 | HUD **CHAS**, **LIHTC**, **Opportunity Zones**, **Qualified Census Tracts** | tract / point | Housing burden, subsidized housing, designations |
-| FHFA / HMDA (CFPB) | tract | Mortgage applications, denials, by race |
-| BLS LAUS / **LEHD LODES** | county / block→tract | Unemployment. Jobs by workplace/residence, commute flows. |
+| HMDA (CFPB) | tract | Mortgage applications, denials, by race |
+| FHFA annual HPI (**developmental**; research release on 2010 tracts, ~63k tracts, 1989–2021) | tract → crosswalk | Repeat-sales house price change |
+| BLS LAUS / **LEHD LODES 8** (2020 blocks; 2002–2022 for most states, with some state gaps) | county / block→tract | Unemployment. Jobs by workplace/residence, commute flows. |
 | FCC **Broadband Data Collection** | location→block→tract | Served / unserved share |
 | EPA **Smart Location Database** / **Walkability Index** | BG | Density, transit access, walkability |
 | NCES **EDGE** school locations, district boundaries | point / polygon | Schools, district joins |
@@ -275,7 +289,7 @@ refresh: annual
 ### 8.1 Options considered
 | Option | Hosting | Map rendering | Strengths | Weaknesses |
 |---|---|---|---|---|
-| **A. Static site: MapLibre GL + PMTiles + DuckDB-WASM / Parquet** | GitHub Pages or Cloudflare Pages (free); large files on **Cloudflare R2** (free 10 GB, no egress fees) or Hugging Face Datasets | Client-side vector tiles, GPU. 85k tracts are smooth. | Free, no server, no cold starts, no RAM cap. Pan/zoom never round-trips to Python (avoids the plutometer `st_folium` issues). Scales to BG level nationally. Shareable URLs. | Needs JS. Heavy analytics (custom kNN) runs in-browser. GitHub Pages blocks files ≥100 MB, so tiles and Parquet go to R2/HF. |
+| **A. Static site: MapLibre GL + PMTiles + DuckDB-WASM / Parquet** | GitHub Pages or Cloudflare Pages (free); large files on **Cloudflare R2** (free 10 GB-month Standard storage, 1M Class A / 10M Class B ops per month, no egress fees) or Hugging Face Datasets | Client-side vector tiles, GPU. 85k tracts are smooth. | Free, no server, no cold starts, no RAM cap. Pan/zoom never round-trips to Python (avoids the plutometer `st_folium` issues). Scales to BG level nationally. Shareable URLs. | Needs JS. Heavy analytics (custom kNN) runs in-browser. GitHub Pages blocks files ≥100 MB, so tiles and Parquet go to R2/HF. |
 | **B. Streamlit (Community Cloud)** | Free, auto-deploy from `main` | `pydeck` (deck.gl) or folium | Python-only, fast to build, matches both reference repos | ~1 GB RAM cap, sleeps when idle, full rerun per interaction, map state loops (plutometer `known-issues.md`). National BG layer is not feasible. |
 | **C. Observable Framework** | Static build → GitHub Pages / Cloudflare | MapLibre/deck.gl or Plot | Data loaders run Python at build time and ship Parquet. Reactive JS. Good charts (Observable Plot). | Newer toolchain. Same static-file limits as A. |
 | **D. Panel / Shiny for Python via Pyodide (WASM)** | Static | deck.gl / ipyleaflet | Python in browser | Slow first load (pyodide + pandas ~30 MB), weak map performance |
@@ -373,13 +387,16 @@ python -m pdbb.pipeline --vintage 2025 --stage publish      # upload large artif
 
 ## 12. Open questions
 
-1. Is the **2026 PDB** published with tract and BG CSVs yet (the developer page lists it)?
-   If so, target it for v1. Check its ACS period and whether the variable list changed.
+1. ~~Is the 2026 PDB published?~~ **Resolved (V-03):** yes, via the API, with
+   2020–24 ACS. Remaining: the CSV filenames and the variable-list diff vs 2025,
+   checked in the Phase 0 spike.
 2. Observable Framework vs. plain Vite/TS for the static front end. Decide after the
    Phase 0 spike.
 3. R2 vs Hugging Face Datasets for large artifacts. R2 gives better range-request
    latency and needs a Cloudflare account. HF is zero-config and public.
-4. EJScreen's federal status. If the EPA tool remains retired, pin the last published
-   version (and/or the CEJST archive) and label it historical.
+4. ~~EJScreen's federal status~~ **Resolved (V-05):** EPA removed it on
+   2025-02-05. Use the PEDP reconstruction or another archived copy and label it
+   historical. A challenge (Sierra Club v. EPA) was reportedly dismissed for lack of
+   standing in 2026-03 (single source).
 5. Which private sources clear license review for caching vs. display-only?
 6. Is BG-level similarity useful given ACS MOEs, or should BG be browse-only?
