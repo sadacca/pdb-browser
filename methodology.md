@@ -425,8 +425,10 @@ never serves as both input and validation for one model.
        errors correlated by window overlap (approximately the overlap fraction;
        the Census Bureau does not publish the covariance) and MOE-derived variances.
      - **Annual anchors:** county/place ACS 1-year (populations ≥ 65k),
-       Population Estimates Program, decennial 2010/2020, and tract-level annual
-       administrative series.
+       Population Estimates Program (yearly county population and housing-unit
+       estimates **back to 1970**, so the model can run annually across the long-history
+       tiers, constrained to county totals), decennial 2010/2020, and tract-level
+       annual administrative series.
        - **ACS 1-year 2020 gap (V-09):** standard 2020 1-year products were never
          published. Only 54 experimental tables exist, at national and state level
          only. The model must treat 2020 as a missing anchor year.
@@ -487,10 +489,15 @@ Checks are logged in `verification_log.md` as V-15 to V-21.
 | **H0** | 1990, 2000, 2010, 2020 | All tracts | Short-form counts (population, race/ethnicity, age, housing units, occupancy, tenure) | **NHGIS geographically standardized time series**, block-based interpolation with **lower and upper bounds** per value (V-15) | 2010 tracts → NHGIS 2010→2020 crosswalk | Free (IPUMS account) |
 | **H0-LF** | 1990, 2000 | All tracts | Long-form (income, education, occupation, poverty) | NHGIS nominal tract tables + NHGIS crosswalks; or the LTDB sample file | Nominal → 2010 → 2020 | Free |
 | **H1** | 1970, 1980 (to 2010) | Tracted areas only. Much of rural America was untracted in 1970/80. | About 20 core full-count and sample variables | **LTDB** (Brown S4), 2010 tracts (V-16); 2020 data limited to race | 2010 tracts → 2020 | Free |
-| **H1-alt** | 1970–2020 | As above | Broader variable set | **Geolytics NCDB 2020**: all decades normalized to **2020 tracts** (V-17) | 2020 tracts natively | **Commercial** (about $1.5k) or institutional (MIT and other libraries). No redistribution. Use only as an internal cross-check. |
+| **H1-alt** | 1970–2020 | As above | **Long-form 1970–2000** (income, poverty, education, employment, housing costs, immigration) + 2010 SF1/ACS + 2020 DHC/ACS | **Geolytics NCDB 2020**: all decades normalized to **2020 tracts** (V-17) | 2020 tracts natively | **Commercial** (about $1.5k) or institutional. At MIT: request via MIT Libraries GIS staff. **Preferred H1 source if access is confirmed.** Use for internal model features and validation only; no redistribution of values. |
+| **H1-raw** | 1980 | Tracted areas | Variables LTDB omits | Census FTP 1980 Summary Tape File tract tables (nominal 1980 tracts) | Our own 1980→2010→2020 crosswalk (NHGIS 1980 boundaries) | Free |
 | **H2** | 1940, 1950, 1960 | **Major cities and surroundings only** (1940/50: limited tracted cities; 1960: "select areas") | Population, race, housing, some socioeconomic variables | NHGIS nominal tract tables + **historical tract boundaries (1910–2000)** (V-18). Social Explorer 1940–60 is *not* on consistent boundaries. | **No standard crosswalk before 1990.** Build our own areal/dasymetric crosswalk, weighted by H3 housing estimates. | Free (NHGIS) |
 | **H3** (all tracts, long-run built form) | 1940–2010 by decade, plus 2019 | **All continental tracts** (72,539) | **Housing units** and **urbanization year** (density + land-cover threshold) | **HHUUD10** (Markley et al. 2022, *Scientific Data*; "maximum reabsorption" interpolation that out-performs LTDB in out-of-sample validation) (V-19) | 2010 tracts → 2020 | Free (OSF / GitHub) |
 | **Legacy covariates** | 1930s | Graded metros only (about 13.5k 2020 tracts) | **HOLC Historic Redlining Indicator** (1–4, area-weighted grades) | Meier & Mitchell / NCRC via openICPSR 141121 V3, on 2000/2010/**2020** tracts (V-20) | Native 2020 | Free |
+| **H2-alt** | 1940–1970 | Tracted cities | Varies by study | **ICPSR** census holdings (some tract-level studies; specific study numbers unverified) | Nominal → own crosswalk | Varies |
+| **Annual county totals** | 1970–present, yearly | All counties | Population and housing units | **Census Population and Housing Unit Estimates** | County | Free. Rake tract-level history to these annual county totals; extends the §5.2 annualized model back to 1970. |
+| *Reference only* | 1790–present | Nation / state / county / city | Historical counts reports | Census historical decennial counts (PDF) | — | Validation of city and county totals |
+| *Not tract-level* | 1790–present | PUMA / county group | Microdata | **IPUMS-USA** samples | — | Free. Synthetic tests of the annualization model; checks on variable definitions over time. |
 | *(deferred)* | 1940, 1950 full count | Enumeration-district level | Microdata | IPUMS full count. **Restricted access** for ED-level geography; no public 1950 ED shapefiles (V-21). | ED → tract is unbuilt | Restricted |
 
 **Rules**

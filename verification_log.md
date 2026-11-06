@@ -32,9 +32,23 @@
 
 ## Long-term history sources (2026-11-06 pass)
 
-The MIT historic-census guide (libguides.mit.edu/census/historic) could not be
-fetched directly: the research session's network blocks that host. Its contents
-were reconstructed from search results and the sources it names.
+The MIT historic-census guide (libguides.mit.edu/census/historic, last updated
+2026-07-09) was first reconstructed from search results, because the session's
+network blocks that host. It was then **read in full from a user-supplied saved copy**.
+
+**Diff vs the guide's nine listed sources**
+
+| Guide source | Smallest geography / earliest year (per guide) | Status in our docs |
+|---|---|---|
+| Social Explorer | Block group / 1790. 1970–2000 normalized to 2010 boundaries; original boundaries back to 1790. MIT subscription. | Covered (V-18). Note: the guide gives **block group** as the smallest geography. |
+| NHGIS | Varies, some down to block / 1790 (.csv, .shp) | Covered (V-15, V-18) |
+| Census historical decennial population and housing counts (reports) | N/A / 1790 (.pdf) | **Added.** A reference and validation source for city and county totals, not tract data. |
+| ICPSR census holdings | Varies, some down to tract / 1790 (ASCII) | **Added** as a candidate H2 source for 1940–70 tract files. Specific study numbers are unverified. |
+| Longitudinal Tract Database | Tract / 1970; "1970 through 2000" on 2010 boundaries (Access, Stata code) | Covered (V-16). The guide understates the range; LTDB's own site lists 1970–2020. |
+| Census FTP (www2.census.gov) | Tract / 1980 (.txt) | **Added.** Raw 1980 Summary Tape File tract tables for variables the LTDB lacks (H1). |
+| IPUMS-USA | Microdata / 1790 | **Added**, with limits: not tract-identifiable (PUMA / county-group geography). Useful for synthetic tests of the annualization model and for checking variable definitions over time. |
+| Census Population and Housing Unit Estimates | **County, yearly, from 1970** (.txt) | **Added as a key anchor:** annual county population back to 1970. This extends the annualized model (methodology.md §5.2) and gives the long-history tiers annual county totals to rake to. |
+| Geolytics Neighborhood Change Database | Tract / 1970. 1970–2000 **long-form**, 2010 SF1 + 2010 ACS, 2020 DHC + 2020 ACS: income, poverty, education, employment, housing costs, immigration. **MIT access: contact MIT Libraries GIS staff (shared password).** | Covered (V-17). Its variable breadth now looks richer than LTDB's, so it is upgraded from cross-check to **preferred H1 source if institutional access is confirmed** (redistribution still prohibited). |
 
 | ID | Assumption | Status | Finding |
 |---|---|---|---|
@@ -90,12 +104,16 @@ Sources: [MIT historic census guide (not fetched)](https://libguides.mit.edu/cen
 3. Pull one FHFA tract HPI file. Confirm the vintage, tract count, and 2010 vs 2020 keys.
 4. Check the AlphaEarth dataset license in the Earth Engine catalog.
 5. Confirm whether HUD USPS vacancy access is available to this project (eligibility).
-6. Allow `libguides.mit.edu` in the session network settings and read the MIT
-   historic guide directly. Diff it against methodology.md §5.4 for any sources missed.
+6. ~~Read the MIT historic guide directly~~ **Done** from the user-supplied copy; see
+   the diff table above.
 7. Check whether the 2010-unit NHGIS time series now has a 2020-unit version.
    If it does, it removes one interpolation step for tier H0.
-8. Confirm institutional access to Geolytics NCDB 2020 and Social Explorer, and
-   whether the NCDB license allows internal validation use.
+8. Confirm institutional access to Geolytics NCDB 2020 and Social Explorer. At MIT,
+   NCDB access goes through MIT Libraries GIS staff (shared password). Confirm
+   whether the NCDB license allows derived, non-redistributed model features, or
+   only internal validation.
+9. Identify the specific ICPSR tract-level studies for 1940–1970 (H2 candidates)
+   and their access terms.
 
 ## Sources
 - ACS geography: [Geography Boundaries by Year (2020)](https://www.census.gov/programs-surveys/acs/geography-acs/geography-boundaries-by-year.2020.html), [Hawaii SDC 2016–2020 release note](https://census.hawaii.gov/?p=9978), [Census 5-year webinar deck](https://www.census.gov/content/dam/Census/newsroom/press-kits/2022/20220310-presentation-acs-5year-webinar.pdf), [Esri: 2016–2020 updated boundaries](https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/mapping/acs-2016-2020-updated-boundaries)
