@@ -246,6 +246,71 @@ eviction rates, balt311 service metrics, election turnout, 2020 self-response
   ADI quintiles. Moderate agreement is expected and healthy. Near-1 agreement means we
   rebuilt an index; near-0 is a warning.
 
+### 4.4b Within-city validation with patchy municipal data (311 and similar)
+
+Municipal operational data (311, code enforcement, permits) covers only the
+cohort cities (balt311 has 15). It is still the most independent external check
+available. The national typology never sees it, and balt311's Areas tab already
+shows that tract service-request mix separates tracts meaningfully. Patchy
+coverage limits **where** we can validate, not **whether** we can: cohorts absent
+from every covered city are reported as *untested*, not as failed.
+
+**Role rule:** for the national typology, municipal data is **validation only,
+never an input**. If a scoped within-city similarity mode uses 311 as a
+feature, that mode must be validated with different held-out outcomes
+(PLACES, eviction, code enforcement) or whole held-out cities. The same data
+never serves as both input and validation for one model.
+
+**Procedure**
+1. **Stratify by city, then meta-analyze.** Run every test within one city.
+   Pool the per-city effect sizes with each city weighted by its tract count,
+   and report how much they vary across cities. Never pool raw 311 values
+   nationally: taxonomies, reporting culture, and closure workflows differ by
+   city (see the balt311 `pct_same_day_close` contamination flags).
+2. **Avoid crosswalking request taxonomies.** Use distance-based tests on each city's own
+   service-type mix:
+   - CLR-transform the SRType shares (the balt311 Areas treatment).
+   - Run **PERMANOVA** to ask whether same-cohort tracts have more similar mixes than
+     different-cohort tracts in the same city.
+   - Report pseudo-R² per city.
+
+   Scalar delivery metrics (median days to close, closure rate) can be compared
+   directly with within-city η².
+3. **Separate reporting propensity from need.** Request *volume* (per 1k) mixes
+   conditions with propensity to report. Propensity varies with income and
+   demographics, so volume-based validation largely rediscovers income.
+   - Prefer service **mix** and **mix-adjusted delivery** metrics (balt311 Tab 6
+     direct standardization) over raw volume.
+   - **Mandatory baseline:** an income-decile-only partition within the same
+     city. Cohorts count as validated on 311 only if they beat it, and also beat
+     a random partition with the same sizes and the city's own geographic units
+     (e.g. Baltimore CSAs).
+4. **Control for spatial autocorrelation.** Both cohorts and 311 outcomes are
+   spatially clustered, so naive tests overstate agreement.
+   - Use **spatially constrained permutation** nulls (e.g. Moran spectral
+     randomization or toroidal-shift-style rotations) instead of free shuffles.
+   - Add a **distance-matched check**: do cohort-mates resemble each other more than
+     non-cohort tracts at the same distance?
+   - In the kNN predictive check (§4.4), "exclude own county" does not apply
+     inside one city. Exclude tracts within **2 queen-adjacency rings** instead.
+5. **Handle sparse tracts.**
+   - Suppress cells with n<5 (balt311 `_MIN_GEO_SRTYPE_N`).
+   - Shrink tract rates and mixes toward the city mean with empirical Bayes.
+   - Weight tracts by request count in all statistics.
+   - Report the share of tracts and cohorts excluded for sparsity.
+6. **Leave-one-city-out transfer.** Learn the cohort-to-311-profile relationship
+   in N−1 cities, then predict the held-out city's tract delivery metrics and
+   harmonized high-level category shares. Report the improvement over the
+   income-only model. This tests whether cohorts carry meaning *across* cities,
+   which the balt311 cross-city work depends on.
+
+**Gates (initial):**
+- Cohorts beat the income-decile baseline on mix PERMANOVA pseudo-R² in
+  ≥ 2/3 of covered cities.
+- The spatially constrained permutation p < 0.05 in the meta-analysis.
+- Results are reported per cohort with an *untested* flag where city coverage is
+  thin (< 10 tracts across all cities).
+
 ### 4.5 Spatial diagnostics
 - **Join-count statistics / Moran's I on cohort labels.** Some spatial clustering
   is expected. An extreme value suggests urbanicity or region dominates, and favors
@@ -340,7 +405,7 @@ and race.
 | Economic mobility | Opportunity Atlas | direct (2010 tracts → crosswalk) | Same: validation, or the outcome-weighted preset. |
 | Housing market | HMDA, FHFA, Zillow (license), USPS vacancy | direct / crosswalk | Market momentum and investment flows. |
 | Hazard and environment | FEMA NRI, EJ indices, flood zones | direct / areal | Exposure dimension. |
-| Municipal operations | 311, code enforcement, permits (balt311 adapters) | point-in-polygon | City-specific. Use for within-city cohorts and equity checks, not the national typology (coverage bias). |
+| Municipal operations | 311, code enforcement, permits (balt311 adapters) | point-in-polygon | **Validation only** for the national typology (within-city procedure in §4.4b). Optional input only for scoped within-city similarity, which is then validated on other outcomes. |
 
 **Coverage rule:** a feature enters the *national* typology only if it covers
 ≥ 95% of tracts with consistent definitions. Municipal and partial-coverage sources
