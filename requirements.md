@@ -184,6 +184,10 @@ refresh: annual
 
 ## 6. Tract profile and similarity analysis
 
+> Method details, prior art, and the validation battery are in
+> [`methodology.md`](methodology.md). Where they conflict, methodology.md supersedes
+> the specifics below.
+
 ### 6.1 Profile
 - **R-PROF-1.** A profile page or panel per geography: header (name, county, place,
   population, area, density), then topic sections. Each variable shows its
