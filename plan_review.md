@@ -6,6 +6,12 @@
 > hosted on free cloud services**. Severity key: **🔴 blocking** (fix before
 > Phase 0/1), **🟠 important** (fix before a public launch), **🟡 worth tracking**.
 > New facts are tagged `RV-xx` so they can be added to `verification_log.md`.
+>
+> **Update v0.2 (2026-11-06):** the hosting decision is now made. It is a tiered
+> **GitHub Pages + Hugging Face Datasets** plan with no Cloudflare (§8 below, and
+> `requirements.md` §8). Items in §1 that were specific to R2 are marked
+> *superseded*. §8 also adds a review of whether this public data and its
+> transformations can be hosted on HF.
 
 ## 0. Summary verdict
 
@@ -49,6 +55,10 @@ The plan's weaknesses are in four other areas:
 
 ### 1.1 Object storage (R2 vs Hugging Face): the main open risk
 
+> *Superseded by §8:* R2 is dropped. The rows on r2.dev, spending caps and the
+> 512 MB cache limit no longer apply. The HF, Source Cooperative and Zenodo rows
+> carry over into the tiered plan.
+
 | Issue | Severity | Detail | Recommendation |
 |---|---|---|---|
 | **r2.dev is not a production endpoint** (RV-01) | 🔴 | Cloudflare documents public `r2.dev` access as rate limited and for development only. Over the limit it returns 429s and may throttle bandwidth. Caching, WAF rules and bot management need a **custom domain** on the bucket. | Budget for a domain (about $10/yr, the one unavoidable cost), add it to Cloudflare, and serve the bucket from `data.<domain>` with cache rules. State this in §8. |
@@ -79,6 +89,9 @@ The plan's weaknesses are in four other areas:
 | **Scheduled workflows go stale** | 🟡 | GitHub disables scheduled workflows in public repos after 60 days without repository activity. A "refresh: annual" source would silently stop. | Use a `workflow_dispatch` run per release, plus a monthly freshness check that opens an issue when a source's upstream `Last-Modified` changes. |
 
 ### 1.4 The "analyst workbench" (Phase 6) is the wrong free-tier shape
+
+> *Adopted:* `requirements.md` Phase 6 is now the "analyst kit" (a Python client
+> plus notebooks).
 
 - 🟠 **Contradiction with R-JOIN-4.** The workbench exists for "BYO-data joins
   too large for the browser". Server-side uploads break the "nothing is uploaded"
@@ -155,10 +168,9 @@ The plan specifies a product thoroughly but a *shared resource* hardly at all.
 
 ## 6. Recommended changes, in priority order
 
-1. **Hosting design (§8):** a custom domain in front of R2, immutable versioned
-   paths, a < 512 MB per-object CI assertion, an R2 operations alert, and the HF
-   mirror as kill switch. Evaluate Source Cooperative as primary or mirror. Use
-   Zenodo DOIs for releases.
+1. ~~**Hosting design:** a custom domain in front of R2…~~ **Done (v0.2):** the
+   tiered GitHub Pages + HF plan is in `requirements.md` §8, and §8 below covers
+   it. Source Cooperative stays a candidate mirror.
 2. **Redistribution gate:** add `redistribution` to the source spec, define the
    public-reproducible build, and resolve the NHGIS and LTDB terms before planning
    published long-history layers.
@@ -186,3 +198,91 @@ The plan specifies a product thoroughly but a *shared resource* hardly at all.
 | RV-06 | NHGIS terms do not permit redistribution without permission, and require citation. | ✅ | [NHGIS terms of use](https://www.nhgis.org/ipums-nhgis-terms-use), [NHGIS citation](https://www.nhgis.org/research/citation) |
 | RV-07 | GitHub Actions public-repo runners: about 14 GB free disk, a 6 h job limit, a 10 GB Actions cache per repo, and scheduled workflows disabled after 60 days of repository inactivity. | ⏳ (from background knowledge; confirm in GitHub docs) | — |
 | RV-08 | Census Geocoder: CORS support and rate limits for browser calls. | ⏳ (Phase 0) | — |
+| RV-09 | HF file downloads redirect to a separate CDN host. A 2026 issue reported that host failing CORS preflight for ranged reads; the issue was closed 2026-02-24, fix unconfirmed. | ⏳ (Phase 0 test) | [datasets#7931](https://github.com/huggingface/datasets/issues/7931), [DuckDB-WASM troubleshooting](https://duckdb.org/docs/preview/clients/wasm/troubleshoot) |
+| RV-10 | HF terms: public repos grant users a perpetual, irrevocable license (third-party reading of the terms). The content policy prohibits "excessive or irrelevant data". Free public storage is best-effort; private storage is 100 GB. | 🟡 (the official ToS couldn't be fetched from this session) | [HF content policy](https://huggingface.co/content-policy), [HF ToS](https://huggingface.co/terms-of-service), [ConductAtlas summary](https://conductatlas.com/platform/hugging-face/hugging-face-terms-of-service/public-repository-irrevocable-user-license/), [HF storage limits](https://huggingface.co/docs/hub/storage-limits) |
+| RV-11 | LTDB: "must not be redistributed without authorization"; no commercial use. | ✅ | [LTDB download page](https://s4.ad.brown.edu/Projects/Diversity/Researcher/LTBDDload/Default.aspx) |
+| RV-12 | HHUUD10: data CC BY 4.0, code MIT. | ✅ | [HHUUD10 GitHub](https://github.com/snmarkley1/HHUUD10) |
+| RV-13 | ICPSR requires committee approval to redistribute its data. The license tab for openICPSR 141121 is unchecked. | 🟡 | [ICPSR redistribution policy](https://www.icpsr.umich.edu/sites/ICPSR/about/policies/redistribution), [openICPSR 141121](https://openicpsr.org/openicpsr/project/141121/version/V3/view) |
+| RV-14 | Mapping Inequality spatial data is CC BY-NC (some copies say BY-NC-SA). | ✅ | [Mapping Inequality data](https://dsl.richmond.edu/panorama/redlining/data) |
+| RV-15 | AlphaEarth Satellite Embedding: CC BY 4.0, with a required attribution string. | ✅ | [AEF on GCS readme](https://developers.google.com/earth-engine/guides/aef_on_gcs_readme) |
+| RV-16 | GitHub Pages: 1 GB site, soft 100 GB/month bandwidth, 10-minute deploy timeout, soft 10 builds/hour (not for custom Actions workflows). Range requests and CORS work for PMTiles (community sources). GitHub Release assets send no CORS headers. | ✅ / 🟡 | [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits), [PMTiles on Pages](https://dev.to/ronitjadhav/how-to-host-and-test-pmtiles-on-github-pages-the-easiest-way-to-serve-maps-without-a-server-2ei8), [Release assets CORS](https://corsfix.com/blog/fetch-github-release) |
+
+
+---
+
+## 8. Update v0.2: the tiered GitHub Pages + Hugging Face plan
+
+### 8.1 What changed and why
+The R2 design worked only with a custom domain, a payment method, cache rules
+and operation alerts, and it still had no spending cap. The tiered plan
+(`requirements.md` §8.3) needs **no domain, no card, and has no billing exposure**.
+If a limit is hit, service degrades; nothing is charged.
+
+| Tier | Host | Role |
+|---|---|---|
+| T0 | GitHub Pages (this repo) | App shell, manifest, dictionary |
+| T1 | GitHub Pages **data repo** (`pdb-browser-data`) | State-sharded tract tiles, county profile shards, quantized embeddings. Can run the whole tract product alone. |
+| T2 | **HF Dataset** (org-owned, split by license class) | Canonical data product: all vintages, BG tiles, history, joined sources, dataset card, `hf://` access |
+| T3 | Zenodo | DOI per release |
+| Private | Private HF dataset | Raw-input mirror for CI |
+
+### 8.2 Remaining risks in the tiered plan
+| Risk | Severity | Mitigation (now in requirements.md) |
+|---|---|---|
+| **HF browser range reads may fail CORS at the redirect host** (RV-09) | 🔴 until tested | A Phase 0 test is an exit criterion. Until it passes, the app reads T1 only, and T2 serves analysts. |
+| **The T1 1 GB site cap** | 🟠 | Target < 900 MB, enforced in CI. Shard by state. One data repo per major release if needed. BG tiles live on T2, so BG browsing depends on the HF test. |
+| **The GitHub Pages 100 GB/month soft bandwidth** | 🟡 | About 50–100k map sessions a month at 1–2 MB each. Beyond that, GitHub may ask you to move. The `manifest.json` fallback URLs make a host switch a config change, not a rebuild. Source Cooperative is the next candidate. |
+| **HF per-IP rate limits** (RV-03) | 🟡 | Ordinary sessions stay well under them. Prefer T1 for hot reads. |
+| **HF changes its free terms** | 🟡 | Archive each release on Zenodo, keep fallback URLs, and keep T1 able to run alone. |
+
+### 8.3 Can this public data, and our transformations of it, be hosted on HF?
+**Mostly yes, with gating.** The research found:
+
+- **HF platform terms are not the binding constraint; the source licenses are.**
+  - HF hosts non-ML civic and geospatial datasets routinely.
+  - Its content policy targets "excessive or irrelevant data". A documented,
+    versioned, viewer-enabled dataset is neither.
+  - The uploader bears responsibility for rights.
+  - I found no HF rule against browser apps reading public files. Still, don't
+    treat the Hub as a generic CDN: T1 carries the hot path.
+- **Public uploads are effectively irreversible.** Making a repo public
+  reportedly grants users a perpetual, irrevocable license (RV-10), and the
+  content stays in git history. A license mistake can't simply be deleted, so
+  the redistribution gate (R-JOIN-5) must run in CI **before** any public push.
+- **Federal sources are fine.** The core of the product (PDB, ACS, decennial,
+  TIGER, LODES, PLACES, SVI, NRI, CHAS and similar) is U.S. Government work
+  with no copyright. Attribution is still expected, and Census API apps must show
+  the "not endorsed or certified" notice.
+- **Several planned research inputs cannot be republished:**
+  - NHGIS (RV-06) and LTDB (RV-11): no redistribution without permission.
+  - Mapping Inequality: non-commercial (RV-14).
+  - ICPSR-distributed data: needs approval (RV-13, for the Historic Redlining
+    Indicator).
+  - NCDB, Social Explorer, USPS vacancy, Zillow.
+
+  These now have `redistribution` classes in the source spec, and a license
+  matrix sits in `requirements.md` §8.5. **The long-history layer's published
+  form depends on NHGIS and LTDB permissions.** Request them now: the answers
+  decide whether H0/H1 can be public data or only feed derived model outputs.
+- **Our transformations inherit their inputs' licenses.** Hence the split into
+  license-class repos:
+  - public domain → CC BY 4.0 core;
+  - CC BY inputs → a CC BY repo with attributions;
+  - OSM and Overture ODbL themes → an ODbL repo.
+
+  Whether a derived model output (for example, a cohort label trained partly on
+  LTDB) counts as redistribution is a question for each source's terms. Treat it
+  as `derived-only, pending` until answered.
+- **Privacy:** publish aggregates only. Raw municipal points stay in the private
+  mirror even when cities publish them.
+- **Forecast outputs:** if published as data, use a **gated** HF repo so the use
+  statement travels with the files. This changes the earlier finding (§4) that
+  UI-only gating doesn't travel with a Parquet file.
+
+### 8.4 Next actions
+1. Phase 0: the HF browser range-read test (PMTiles + DuckDB-WASM, from `github.io`).
+2. Create the GitHub org, the HF org and the three license-class repos (empty), plus the private raw mirror.
+3. Email NHGIS, Brown S4 (LTDB) and ICPSR about redistributing derived
+   tract-level outputs. Read the Opportunity Atlas, Eviction Lab, COI 3.0 and
+   Neighborhood Atlas terms (the ⏳ rows in §8.5).
+4. Implement the `redistribution` gate and the T1 size assertions in CI before the first public push.

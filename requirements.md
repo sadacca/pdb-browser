@@ -94,8 +94,10 @@ Audiences:
   joins where shoreline precision matters.
 - **R-GEO-2.** Store geometry once and attributes separately (the plutometer split):
   - `geo/tract.fgb`, `geo/bg/{state}.fgb`: GEOID + geometry (FlatGeobuf, spatially indexed)
-  - `tiles/tract.pmtiles`, `tiles/bg.pmtiles`: vector tiles for the browser, GEOID
-    plus a **small** set of styling attributes. Full attributes are fetched on demand.
+  - `tiles/tract/{st}.pmtiles`, `tiles/bg/{st}.pmtiles`: vector tiles for the browser,
+    **sharded by state** so every file is < 100 MB (GitHub Pages limit, §8.4). Each
+    holds GEOID plus a **small** set of styling attributes. Full attributes are
+    fetched on demand from per-county profile shards.
 - **R-GEO-3.** Hierarchy columns on every row: state, county, county subdivision,
   place (principal city), CBSA/metro, congressional district, and ZCTA (by
   majority-area relationship file). These drive the "filter to my city/region"
@@ -122,6 +124,8 @@ id: hud_chas_cost_burden
 title: Housing cost burden (HUD CHAS)
 tier: federal            # municipal | state | federal | private
 license: public-domain   # SPDX id or "proprietary-display-only"
+redistribution: public    # public | derived-only | internal-only | display-only (gates publish, §8.5)
+attribution: "Source: U.S. Department of Housing and Urban Development, CHAS 2017–2021"
 vintage: 2017-2021
 native_geography: tract  # tract | bg | block | point | polygon | county | zcta | place
 join: direct             # direct | point_in_polygon | areal_interpolation | crosswalk | broadcast
@@ -152,8 +156,12 @@ refresh: annual
 - **R-JOIN-4.** **Bring your own data.** In the browser, a user can upload a CSV
   with a GEOID column, or lat/lon points (≤ ~200k rows), and join it client-side for
   this session only. Nothing is uploaded to a server.
-- **R-JOIN-5.** Licensing gate: `proprietary-display-only` sources are never
-  written into downloadable exports or committed tiles.
+- **R-JOIN-5.** Redistribution gate. Each artifact records the `redistribution`
+  classes of every input in its lineage. Only all-`public` lineages are published
+  (T0–T3, §8.3). `derived-only` inputs may feed published model outputs only after
+  the source's terms are confirmed in the §8.5 matrix. `internal-only` and
+  `display-only` inputs are never published, and that includes tiles: anything
+  sent to a browser is downloadable.
 
 ### 5.3 Candidate supplemental sources (prioritized)
 
@@ -288,44 +296,159 @@ refresh: annual
 
 ## 8. Architecture and hosting
 
+> **Decision v0.2 (2026-11-06):** a static site on **GitHub Pages**, with the data on
+> **Hugging Face Datasets** plus a dedicated GitHub Pages **data repo** as the hot
+> tier and fallback. Cloudflare R2 is dropped. The reasoning is in
+> `plan_review.md` §1 and §8.
+
 ### 8.1 Options considered
 | Option | Hosting | Map rendering | Strengths | Weaknesses |
 |---|---|---|---|---|
-| **A. Static site: MapLibre GL + PMTiles + DuckDB-WASM / Parquet** | GitHub Pages or Cloudflare Pages (free); large files on **Cloudflare R2** (free 10 GB-month Standard storage, 1M Class A / 10M Class B ops per month, no egress fees) or Hugging Face Datasets | Client-side vector tiles, GPU. 85k tracts are smooth. | Free, no server, no cold starts, no RAM cap. Pan/zoom never round-trips to Python (avoids the plutometer `st_folium` issues). Scales to BG level nationally. Shareable URLs. | Needs JS. Heavy analytics (custom kNN) runs in-browser. GitHub Pages blocks files ≥100 MB, so tiles and Parquet go to R2/HF. |
-| **B. Streamlit (Community Cloud)** | Free, auto-deploy from `main` | `pydeck` (deck.gl) or folium | Python-only, fast to build, matches both reference repos | ~1 GB RAM cap, sleeps when idle, full rerun per interaction, map state loops (plutometer `known-issues.md`). National BG layer is not feasible. |
-| **C. Observable Framework** | Static build → GitHub Pages / Cloudflare | MapLibre/deck.gl or Plot | Data loaders run Python at build time and ship Parquet. Reactive JS. Good charts (Observable Plot). | Newer toolchain. Same static-file limits as A. |
+| **A. Static site: MapLibre GL + PMTiles + DuckDB-WASM / Parquet** | GitHub Pages (free) for the app. Data on HF Datasets and/or a GitHub Pages data repo (§8.3). | Client-side vector tiles, GPU. 85k tracts are smooth. | Free, no server, no cold starts, no RAM cap. Pan/zoom never round-trips to Python (avoids the plutometer `st_folium` issues). Scales to BG level nationally. Shareable URLs. | Needs JS. Heavy analytics (custom kNN) runs in-browser. GitHub Pages blocks files ≥ 100 MB and caps a site at 1 GB. |
+| **B. Streamlit (Community Cloud)** | Free, auto-deploy from `main` | `pydeck` (deck.gl) or folium | Python-only, fast to build, matches both reference repos | About 1 GB of guaranteed RAM. Sleeps after 12 h without traffic. Full rerun per interaction. Map state loops (plutometer `known-issues.md`). One shared process for all users. National BG layer is not feasible. |
+| **C. Observable Framework** | Static build → GitHub Pages | MapLibre/deck.gl or Plot | Data loaders run Python at build time and ship Parquet. Reactive JS. Good charts (Observable Plot). | There are signs of slowing maintenance (RV-05). Same static-file limits as A. |
 | **D. Panel / Shiny for Python via Pyodide (WASM)** | Static | deck.gl / ipyleaflet | Python in browser | Slow first load (pyodide + pandas ~30 MB), weak map performance |
-| **E. Hugging Face Spaces (Streamlit/Gradio/Docker)** | Free CPU Space (16 GB RAM) | any | More RAM than Streamlit Cloud. Can co-locate datasets. | Sleeps when idle. Same rerun model if Streamlit. |
+| **E. Hugging Face Spaces (Streamlit/Gradio/Docker)** | Free CPU Basic Space (2 vCPU, 16 GB RAM) | any | More RAM than Streamlit Cloud. Can co-locate datasets. | Sleeps after 48 h idle, then a slow wake-up. Same rerun model if Streamlit. Uploaded data reaches a server. |
 | **F. Evidence.dev / Datasette-Lite** | Static | limited | Good for the table/SQL browse | Weak custom maps and similarity UI |
+| ~~G. Cloudflare R2 for data~~ | 10 GB free storage, zero egress | — | Fast range reads | **Dropped.** The free `r2.dev` URL is rate limited and meant for development only. Caching needs a custom domain. A payment method is required and there is no spending cap. Objects over 512 MB aren't cached on the Free plan. |
 
-### 8.2 Decision (proposed)
-- **Primary: Option A/C hybrid.** A static site built with **Observable
-  Framework** (or plain Vite + TypeScript if Framework proves limiting), using:
-  - **MapLibre GL JS** + `pmtiles` protocol. Free basemap: OpenFreeMap or
-    Protomaps basemap PMTiles, so no Mapbox token is needed.
-  - **DuckDB-WASM** querying remote **Parquet** over HTTP range requests (feature
-    matrix, joined sources, dictionary), with row-group pruning by state.
-  - **Observable Plot** (or Vega-Lite) for distributions, strips, and scatter.
-  - Pre-built tiles, Parquet, and kNN indexes from a Python pipeline in GitHub Actions.
-- **Secondary: Streamlit "analyst workbench"** (Option B or E) for heavy or
-  experimental work: custom regionalization, re-fitting embeddings,
-  BYO-data joins too large for the browser. It reads the **same** Parquet outputs, so
-  there is one data product and two front ends. Use `pydeck` with a scoped bbox, not
-  `st_folium`.
+### 8.2 Decision
+- **Front end:** a static site on **GitHub Pages**, built with **plain Vite +
+  TypeScript**. Use Observable Framework only for the explainer and backtest pages,
+  if at all. The site uses:
+  - **MapLibre GL JS** + the `pmtiles` protocol. Basemap: OpenFreeMap (keyless),
+    with a configurable style URL and a low-zoom Protomaps extract as fallback.
+  - **DuckDB-WASM, loaded lazily** for tables, profiles and kNN. First paint
+    uses tile attributes only. For simple reads, `hyparquet` or Arrow IPC can
+    replace DuckDB.
+  - **Observable Plot** (or Vega-Lite) for distributions, strips and scatter.
+  - Tiles, Parquet and kNN indexes are pre-built by a Python pipeline in GitHub Actions.
+- **Data:** three tiers (§8.3), all addressed through `manifest.json`. The app
+  never hard-codes a data host.
+- **Analysts:** instead of a hosted workbench, ship a `pip install`-able `pdbb`
+  client and notebooks (Colab, Binder, local) that read the published Parquet
+  with DuckDB or `hf://`. Users bring their own compute and data, and nothing is
+  uploaded. A HF Space is optional and for demos only.
 - **Revisit** if in-browser kNN on national BG (242k rows) proves too slow. If so, ship
   precomputed top-50 neighbors per preset as Parquet.
 
-### 8.3 Data budget
-| Artifact | Target size | Host |
+### 8.3 Hosting tiers
+| Tier | Host | Holds | Limits that shape it |
+|---|---|---|---|
+| **T0. App** | GitHub Pages from this repo (`<org>.github.io/pdb-browser`) | App bundle, `manifest.json`, `variables.parquet`, small presets | 1 GB per site; soft 100 GB/month bandwidth; files < 100 MB; deploys via Actions (the soft 10 builds/hour limit doesn't apply) |
+| **T1. Hot data** | A dedicated **data repo** published on GitHub Pages (`<org>/pdb-browser-data`). One repo per major release if the 1 GB cap requires it. | Tract tiles **sharded by state** (`tiles/tract/{st}.pmtiles`); per-county profile shards; quantized facet embeddings; tract feature matrix | The same 1 GB and < 100 MB limits. Range requests and CORS work for PMTiles on Pages (community-verified; confirm in Phase 0). This tier must run the **whole tract product** even if HF is unavailable. |
+| **T2. Canonical data product** | **Hugging Face Dataset** under an HF organization (`<org>/pdb-browser`), split into license-class repos (§8.5) | Wide PDB Parquet (all vintages), joined sources, BG tiles (state-sharded), long-history panel, comps/projections, dataset card | Public storage is free on a best-effort basis, with no per-repo size cap. Anonymous per-IP rate limits apply: about 3,000 file requests per 5 min (RV-03). Files are served via a redirect to a CDN host (RV-09). |
+| **T3. Archive** | **Zenodo** record per release | Frozen Parquet + `manifest.json` + data card | Gives a citable DOI. Not used for serving. |
+| **Private. Raw-input mirror** | A **private** HF dataset repo (100 GB of private storage free) | Raw downloads keyed by URL + sha256, so CI can reuse them and they survive upstream removals | Never public: some raw inputs can't be redistributed, and municipal point data can contain addresses (§8.5). |
+
+**Browser reads from HF must pass a Phase 0 test before T2 serves the app directly.**
+HF serves files by redirecting to a separate CDN host, and a 2026 issue reported that
+host failing the CORS checks for ranged reads (RV-09; closed 2026-02-24, fix
+unconfirmed). Until the test passes, the app reads T1 only, and T2 serves analysts
+(`hf://`, notebooks, downloads). The test is a ranged `GET` and `HEAD` from a page on
+`github.io`, run with both PMTiles and DuckDB-WASM.
+
+**URLs and versioning**
+- Every artifact URL is **immutable**: T1 uses `/{release}/...` paths. T2 uses
+  `/resolve/{tag}/...`, pinned to a git tag on the dataset, never `main`. An
+  in-flight PMTiles reader breaks if a file changes under the same URL, so nothing
+  is overwritten in place.
+- `manifest.json` (JSON-schema'd) lists each artifact's primary URL, fallback URL,
+  sha256, bytes, vintage, release and license class. The app tries the primary
+  host, then the fallback.
+- Data releases follow semver: removing or renaming a column is a major version.
+  Changes go in `CHANGELOG-data.md`.
+
+### 8.4 Data budget
+| Artifact | Target size | Tier |
 |---|---|---|
-| `tract.pmtiles` (z0–12, GEOID + ~5 attrs) | ≤ 150 MB | R2 / HF |
-| `bg.pmtiles` (z8–14) | ≤ 400 MB | R2 / HF |
-| `pdb_tract_{V}.parquet` (zstd, row groups by state) | ~40–60 MB | R2 / HF |
-| `features/*.parquet`, `variables.parquet`, small joins | < 50 MB each | repo or R2 |
-| App bundle | < 2 MB | GitHub Pages |
-Commit to git only what stays under ~50 MB per file. Larger artifacts are published by CI
-to object storage, with a `manifest.json` (URL, sha256, vintage, build date) committed
-to the repo.
+| `tiles/tract/{st}.pmtiles` (z0–12, GEOID + ~5 attrs) | ≤ 150 MB total, each < 100 MB | T1 (mirrored to T2) |
+| `tiles/bg/{st}.pmtiles` (z8–14) | ≤ 400 MB total, each < 100 MB | T2 (T1 only if it fits) |
+| `profile/{county}.parquet` (per-click profile shards) | ≤ 100 MB total | T1 |
+| `embed/{facet}.i8` (quantized facet embeddings) | ≤ 10 MB tract | T1 |
+| `pdb_tract_{V}.parquet` (zstd, row groups by state) | ~40–60 MB per vintage | T2 |
+| `features/*.parquet`, `variables.parquet`, small joins | < 50 MB each | T0/T1 (dictionary), T2 (rest) |
+| App first paint (shell + MapLibre + pmtiles) | ≤ 1.5 MB | T0 |
+| DuckDB-WASM (lazy) | several MB, loaded on demand | T0 or a pinned npm CDN |
+| T1 site total | **< 900 MB** (headroom under 1 GB) | — |
+
+CI assertions:
+- every published file is < 100 MB (T0/T1);
+- T1 total is < 900 MB;
+- every `manifest.json` sha256 matches the uploaded file.
+
+### 8.5 Publishing public data and transformations on Hugging Face
+
+Hosting derived census tables on HF is permitted. HF hosts many civic and
+geospatial datasets, and its terms place the responsibility for content rights on
+the uploader. Four rules keep this project within those terms and within each
+source's license:
+
+1. **Make a public upload only after the redistribution gate passes.** Two things
+   make a mistaken upload effectively irreversible:
+   - Making a repo public grants other users a perpetual, irrevocable license
+     (per third-party readings of HF's terms; RV-10).
+   - The file stays in git history.
+
+   So the `publish` stage refuses any artifact that has a non-`public` input in its
+   lineage (see `redistribution` in §5.1).
+2. **Split repos by license class**, so each dataset card's `license:` field is
+   accurate:
+   - `<org>/pdb-browser`: public-domain federal inputs plus our transformations.
+     Licensed **CC BY 4.0**: attribution to this project and to the sources,
+     which also suits academic citation. CC0 is the alternative if maximum reuse
+     matters more.
+   - `<org>/pdb-browser-ccby`: derivatives of CC BY sources (HHUUD10, AlphaEarth
+     aggregates), with their attribution strings.
+   - `<org>/pdb-browser-odbl`: OSM- and Overture-derived variables from the
+     ODbL-licensed themes (buildings, transportation, base). ODbL share-alike
+     applies to derived databases. Overture Places is CDLA-Permissive 2.0 and can
+     go in the CC BY repo.
+   - **No public repo** for non-commercial (NC), no-redistribution or
+     display-only sources.
+3. **Keep the dataset a dataset, not just website assets.** HF's content policy
+   prohibits "excessive or irrelevant data" (RV-10). Publish Parquet files with
+   `configs` so the dataset viewer works. Write a full dataset card covering
+   sources, methods, MOE caveats, the use statement, citation and the license
+   table. Version releases with tags. Keep total size proportionate, and ask HF
+   before going past roughly a few hundred GB.
+4. **Gated repos for sensitive outputs.** If forecast outputs (research_plan R2) are
+   published as data, put them in a **gated** HF repo, where users must accept the
+   use statement before downloading. That is the only mechanism here that makes the
+   use restrictions travel with the files. Gating requires a token, so the static
+   site would show forecasts only through the explainer pages or an ungated
+   display subset. Decide this before Phase 3.
+
+**Source-license matrix for the planned sources.** Check each row before that
+source's first public release. ✅ = checked this pass, 🟡 = partial, ⏳ = open.
+
+| Source | License / terms | Public HF? | Status |
+|---|---|---|---|
+| Census PDB, ACS, decennial, TIGER/CB, LODES, PEP (federal works, 17 U.S.C. §105) | Public domain. Cite the Census Bureau as the source. Apps using the Census API must show the API's "not endorsed or certified" notice. | ✅ yes | 🟡 (statute via secondary sources; check the API ToS wording) |
+| CDC PLACES, SVI; FEMA NRI; USDA Food Atlas; HUD CHAS/LIHTC/QCT; HMDA; FCC BDC; EPA SLD; NCES EDGE; HRSA | U.S. Government works; cite as requested | ✅ yes | ⏳ (confirm per source; some ask for specific citations) |
+| HUD-USPS ZIP crosswalk | Free with a token. Use it as a **join input**. Redistributing the crosswalk file itself is unconfirmed. | derived only | ⏳ |
+| USPS vacancy (HUD) | Restricted to government/nonprofit users | ❌ never | ✅ (V-04) |
+| EJScreen via PEDP / EDGI | The original EPA data is a U.S. Government work. The reconstruction's own terms weren't found. | 🟡 likely yes, labeled "historical, unofficial" | ⏳ |
+| NHGIS | **No redistribution without permission**; citation required | ❌ unless permission is granted; derived model outputs only, pending a ruling | ✅ (RV-06) |
+| LTDB (Brown S4) | **No redistribution without authorization**; no commercial use | ❌ derived only, pending permission | ✅ (RV-11) |
+| HHUUD10 | Data **CC BY 4.0**, code MIT | ✅ CC BY repo | ✅ (RV-12) |
+| HOLC Historic Redlining Indicator (openICPSR 141121) | ICPSR requires approval to redistribute data. The project's own license tab is unchecked. | ⏳ link plus derived flags only until checked | 🟡 (RV-13) |
+| Mapping Inequality HOLC polygons | **CC BY-NC** (project page; some copies say BY-NC-SA) | ❌ (NC) | ✅ (RV-14) |
+| AlphaEarth satellite embeddings | **CC BY 4.0**, with the attribution text "produced by Google and Google DeepMind" | ✅ CC BY repo | ✅ (RV-15) |
+| Overture Places / Buildings / Transportation / Base | Places: CDLA-Permissive 2.0. Buildings, Transportation, Base: ODbL. | ✅ by class | 🟡 (2023–24 releases; recheck) |
+| OpenStreetMap | ODbL | ✅ ODbL repo | ✅ |
+| Opportunity Atlas | Terms not found (figures may be reprinted with credit) | ⏳ | ⏳ |
+| Eviction Lab | Terms not found | ⏳ | ⏳ |
+| Child Opportunity Index 3.0 | Use is subject to the diversitydatakids.org Terms and Conditions (unread) | ⏳ | ⏳ |
+| Area Deprivation Index (Neighborhood Atlas) | Terms not found; registration-based | ⏳ benchmark only | ⏳ |
+| Geolytics NCDB, Social Explorer | Commercial license | ❌ never; internal validation only | ✅ (V-17) |
+| Zillow ZHVI/ZORI | Terms restrict redistribution | ❌; exclude from the static site entirely | 🟡 |
+| Municipal open data (311, crime, permits) | Varies by city (often public domain or CC BY; some ODbL) | ✅ **tract aggregates only**, n<5 suppressed; raw points stay in the private mirror | ⏳ (per city in its spec) |
+
+**Privacy on HF:** publish aggregates only. Never publish raw municipal point
+records, even when the city publishes them, because some carry addresses or
+free-text fields. The Census confidentiality requirement (13 U.S.C. §§ 8–9) is
+already met by the published tables; this project adds no individual-level data.
 
 ## 9. Pipeline
 
@@ -342,12 +465,16 @@ python -m pdbb.pipeline --vintage 2025 --stage tiles        # tippecanoe → PMT
 python -m pdbb.pipeline --vintage 2025 --stage publish      # upload large artifacts, write manifest.json
 ```
 
-- **R-PIPE-1.** Raw downloads go to a gitignored `data/raw/` cache and are reused across runs.
+- **R-PIPE-1.** Raw downloads go to a gitignored `data/raw/` cache, backed by the
+  **private** HF raw-input mirror (§8.3), keyed by URL + sha256. GitHub runners are
+  ephemeral and the Actions cache is capped at 10 GB, so the local cache alone
+  can't be relied on.
 - **R-PIPE-2.** GitHub Actions: `pipeline.yml` (`workflow_dispatch`, inputs: vintage,
   stages, sources), with a commit or publish after each stage so a late failure keeps
   earlier output (plutometer pattern). Per-source jobs run in a matrix (balt311
   `peer_city_parallel.yml` pattern). Secrets: `CENSUS_API_KEY`,
-  `SOCRATA_APP_TOKEN` (optional), R2 credentials.
+  `SOCRATA_APP_TOKEN` (optional), `HUD_API_TOKEN`, `HF_TOKEN` (write access to the org's
+  dataset repos), and a deploy key for the T1 data repo.
 - **R-PIPE-3.** Tooling: Python 3.11+, `pandas`/`pyarrow`, `geopandas` + `pyogrio`,
   `duckdb` (+ spatial extension), `shapely` 2, `tobler`, `libpysal`/`spopt`,
   `scikit-learn`, `pynndescent`/`umap-learn` (optional), `tippecanoe` (apt/binary),
@@ -379,13 +506,13 @@ python -m pdbb.pipeline --vintage 2025 --stage publish      # upload large artif
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **0. Spike** | Validate the PDB 2025/2026 URLs and variables. One-state (MD) prototype: PMTiles + MapLibre + DuckDB-WASM on GitHub Pages. | Click a tract → see PDB values, on free hosting, < 3 s load. |
+| **0. Spike** | Validate the PDB 2025/2026 URLs and variables. One-state (MD) prototype: PMTiles + MapLibre on GitHub Pages (T0/T1), with lazily loaded DuckDB-WASM. **Browser range-read test against HF (§8.3, RV-09).** Census Geocoder CORS check. | Click a tract → see PDB values, on free hosting. First paint < 3 s on throttled 4G. HF read test passed or failed, with T1-only fallback confirmed. |
 | **1. Browse MVP** | National tract PDB browse: map, variable picker, dictionary, profile with percentiles and MOE flags, table + export, address search. | Public URL. All ~85k tracts. Mobile usable. |
 | **2. Join framework** | Source-spec + `joins.py` (all 5 join types). P1 federal sources (PLACES, SVI, NRI, Food Atlas, CHAS/QCT, LODES). BYO-CSV upload. | ≥6 sources live with join reports. |
 | **3. Similarity** | Feature store + facets (methodology.md §3.7), find-similar with explanations, embedding scatter, typology clusters. Then **forecast mode**: tract-level PECOTA comps, cards, and backtest (research_plan.md R2). | kNN < 1 s national. Explanations shown. R2 backtest gates pass. |
 | **4. Municipal/state** | balt311 adapters → 311 per-tract metrics for the cohort cities. MD state sources. Custom roll-ups (CSA). Equity lens. | Baltimore reproduces balt311 tract metrics within tolerance. |
 | **5. Block groups and blocks** | BG layer nationally. Block drill-down (decennial counts) per county. Dasymetric interpolation. | BG browse + similarity live. |
-| **6. Analyst workbench** | Streamlit/HF Space for regionalization, custom embeddings, large BYO joins. | Shares the data product with the static site. |
+| **6. Analyst kit** | `pdbb` Python client + notebooks (Colab/Binder) for regionalization, custom embeddings, large BYO joins, reading the T2 HF dataset. Optional HF Space demo. | Notebooks run against a tagged release with no server. |
 
 ## 12. Open questions
 
@@ -394,8 +521,9 @@ python -m pdbb.pipeline --vintage 2025 --stage publish      # upload large artif
    checked in the Phase 0 spike.
 2. Observable Framework vs. plain Vite/TS for the static front end. Decide after the
    Phase 0 spike.
-3. R2 vs Hugging Face Datasets for large artifacts. R2 gives better range-request
-   latency and needs a Cloudflare account. HF is zero-config and public.
+3. ~~R2 vs Hugging Face Datasets~~ **Resolved (2026-11-06):** GitHub Pages (app +
+   T1 data repo) and HF Datasets (canonical data product), with Zenodo as the archive.
+   R2 is dropped (§8.1 G). Remaining: the Phase 0 HF browser-read test (RV-09).
 4. ~~EJScreen's federal status~~ **Resolved (V-05):** EPA removed it on
    2025-02-05. Use the PEDP reconstruction or another archived copy and label it
    historical. A challenge (Sierra Club v. EPA) was reportedly dismissed for lack of
