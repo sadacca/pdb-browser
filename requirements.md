@@ -172,6 +172,8 @@ refresh: annual
 | BLS LAUS / **LEHD LODES 8** (2020 blocks; 2002–2022 for most states, with some state gaps) | county / block→tract | Unemployment. Jobs by workplace/residence, commute flows. |
 | FCC **Broadband Data Collection** | location→block→tract | Served / unserved share |
 | EPA **Smart Location Database** / **Walkability Index** | BG | Density, transit access, walkability |
+| **Long-history layer** (methodology.md §5.4): NHGIS standardized 1990–2020, LTDB 1970–2020, **HHUUD10** housing units 1940–2019 + urbanization year, NHGIS 1940–60 nominal tract tables + historical boundaries | tract (2010 → 2020 crosswalk) | Decades-long trajectories, neighborhood "age" |
+| **HOLC Historic Redlining Indicator** (openICPSR 141121 V3) | 2020 tract | Legacy context. Equity facet only, not a forecast predictor. |
 | NCES **EDGE** school locations, district boundaries | point / polygon | Schools, district joins |
 | Opportunity Insights **Opportunity Atlas** | tract | Intergenerational mobility outcomes |
 | HRSA HPSA / MUA designations | polygon | Health-professional shortage areas |

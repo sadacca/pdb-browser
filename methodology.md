@@ -474,6 +474,69 @@ never serves as both input and validation for one model.
 | **Multivariate time-series similarity** (DTW on domain scores) | Trajectory-aware kNN | On non-overlapping periods (3–5 points), plain Euclidean on stacked vectors is enough. DTW/shape matching becomes worthwhile on the layer-2 annualized series (§5.2), but report it with the modeled uncertainty. |
 | **Higher-frequency non-ACS series** (annual LODES, HMDA, FHFA tract HPI, IRS SOI by ZIP, Zillow monthly, 311; USPS vacancy only if eligible, V-04) | Recent-momentum features | Genuinely independent annual data. Good for detecting change *since* the last ACS window. |
 
+### 5.4 Long-term history (1940–2020): tiers, sources, and uses
+
+The MIT Libraries historic-census guide and the sources it points to (NHGIS, LTDB,
+Social Explorer, Geolytics NCDB), plus open research datasets, allow tract
+trajectories well beyond the ACS era. Coverage and comparability fall off with each
+earlier decade, so history comes in **tiers**, each with explicit quality flags.
+Checks are logged in `verification_log.md` as V-15 to V-21.
+
+| Tier | Years | Coverage | Variables | Source(s) | Boundary basis | Access |
+|---|---|---|---|---|---|---|
+| **H0** | 1990, 2000, 2010, 2020 | All tracts | Short-form counts (population, race/ethnicity, age, housing units, occupancy, tenure) | **NHGIS geographically standardized time series**, block-based interpolation with **lower and upper bounds** per value (V-15) | 2010 tracts → NHGIS 2010→2020 crosswalk | Free (IPUMS account) |
+| **H0-LF** | 1990, 2000 | All tracts | Long-form (income, education, occupation, poverty) | NHGIS nominal tract tables + NHGIS crosswalks; or the LTDB sample file | Nominal → 2010 → 2020 | Free |
+| **H1** | 1970, 1980 (to 2010) | Tracted areas only. Much of rural America was untracted in 1970/80. | About 20 core full-count and sample variables | **LTDB** (Brown S4), 2010 tracts (V-16); 2020 data limited to race | 2010 tracts → 2020 | Free |
+| **H1-alt** | 1970–2020 | As above | Broader variable set | **Geolytics NCDB 2020**: all decades normalized to **2020 tracts** (V-17) | 2020 tracts natively | **Commercial** (about $1.5k) or institutional (MIT and other libraries). No redistribution. Use only as an internal cross-check. |
+| **H2** | 1940, 1950, 1960 | **Major cities and surroundings only** (1940/50: limited tracted cities; 1960: "select areas") | Population, race, housing, some socioeconomic variables | NHGIS nominal tract tables + **historical tract boundaries (1910–2000)** (V-18). Social Explorer 1940–60 is *not* on consistent boundaries. | **No standard crosswalk before 1990.** Build our own areal/dasymetric crosswalk, weighted by H3 housing estimates. | Free (NHGIS) |
+| **H3** (all tracts, long-run built form) | 1940–2010 by decade, plus 2019 | **All continental tracts** (72,539) | **Housing units** and **urbanization year** (density + land-cover threshold) | **HHUUD10** (Markley et al. 2022, *Scientific Data*; "maximum reabsorption" interpolation that out-performs LTDB in out-of-sample validation) (V-19) | 2010 tracts → 2020 | Free (OSF / GitHub) |
+| **Legacy covariates** | 1930s | Graded metros only (about 13.5k 2020 tracts) | **HOLC Historic Redlining Indicator** (1–4, area-weighted grades) | Meier & Mitchell / NCRC via openICPSR 141121 V3, on 2000/2010/**2020** tracts (V-20) | Native 2020 | Free |
+| *(deferred)* | 1940, 1950 full count | Enumeration-district level | Microdata | IPUMS full count. **Restricted access** for ED-level geography; no public 1950 ED shapefiles (V-21). | ED → tract is unbuilt | Restricted |
+
+**Rules**
+- **One canonical 2020-tract panel.** Every tract-year row records
+  `harmonization_path` (e.g. `ltdb2010→nhgis_xw2020`), `source_tier`, and an
+  **interpolation-uncertainty bound**. NHGIS supplies bounds directly. For LTDB and
+  our own H2 crosswalks, derive the bound from the area or housing share that
+  crosses boundaries. Two-step paths (nominal → 2010 → 2020) widen the bound.
+- **Coverage flags.** Each record also stores `tracted_share`, the share of today's
+  tract that was tracted in that year. Earlier decades are *missing*, not zero,
+  where untracted, and are never imputed silently.
+- **Variable comparability.** Category definitions drift: race (1980 Hispanic
+  origin, 2000 multi-race), occupation codes (not harmonized across decades),
+  and income (nominal, so deflate). Keep a **core long-run preset**: population,
+  housing units, occupancy/vacancy, tenure, age structure, broad race/ethnicity,
+  and from 1970 onward median income (deflated) and BA+ share.
+- **Weighting by quality.** Similarity and trajectory models down-weight
+  tract-years by uncertainty bound and coverage. Earlier decades inform the
+  *shape* of a trajectory more than its exact levels.
+
+**What long history adds**
+1. **Neighborhood "age" for PECOTA** (research_plan.md R2). HHUUD10's
+   **urbanization year** gives every tract a birth year, so trajectories can be
+   aligned by **years since urbanization**, just as PECOTA aligns players by age.
+   Life-cycle ("aging") curves are then estimated from 80 years of housing growth
+   across all 72k tracts, not from three ACS periods.
+2. **Long "careers" for comps.** Tracts with H0/H1 history can be matched on
+   1970–2020 trajectory shape (core preset). Comps whose decades of history
+   resemble the target's are much stronger than single-snapshot matches.
+3. **Longer backtests.** Extra out-of-sample folds on the core preset: 1980→1990
+   predicting 2000, and 1990→2000 predicting 2010. Era adjustment matters more here
+   (1970s urban decline vs 2000s growth), mirroring PECOTA's run-environment
+   adjustment.
+4. **Trajectory typologies.** Delmelle-style sequences over 1970–2020, decennial.
+   This is the classic neighborhood-change literature design, now possible nationally
+   for tracted areas.
+5. **Legacy context.** The redlining indicator and early composition explain
+   present-day gaps. Treat them as a *contextual and equity* facet ("History and
+   legacy"), together with urbanization year and the housing growth path.
+
+**Responsible use**
+- Do not let historical redlining grades act as a *predictor of decline* in the
+  public forecast. That would re-encode the original harm.
+- Test whether including them changes forecasts. If they are used, show them as
+  explanatory context, and gate them like the R2.6 Decline tiles.
+
 ## 6. Supplemental sources that add independent signal for clustering
 
 Prioritize sources that measure what the PDB/ACS **cannot**, rather than more

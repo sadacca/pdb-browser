@@ -68,8 +68,18 @@ Three layers (methodology.md §5.2, "display yes, inference no"):
    - Validated against held-out county 1-year ACS.
    - Stored as `panel/tract_annual_modeled.parquet` with uncertainty bands.
 3. **Inference: non-overlapping windows** 2009–13, 2014–18, 2019–23, plus decennial
-   1990/2000/2010/2020 for the "core temporal" preset, and optionally LTDB
-   1970–2020 for long histories.
+   1990/2000/2010/2020 for the "core temporal" preset.
+4. **Long history** (methodology.md §5.4), built in tiers on the same 2020-tract
+   panel, with `source_tier`, `harmonization_path`, uncertainty bounds, and
+   `tracted_share`:
+   - **H0:** NHGIS standardized 1990–2020.
+   - **H1:** LTDB 1970/1980.
+   - **H3:** HHUUD10 housing units 1940–2019 and urbanization year (all tracts).
+   - **Legacy covariates:** the HOLC Historic Redlining Indicator.
+   - **H2:** the 1940–60 tracted-city build is a stretch goal: start with Baltimore
+     plus 3–5 other cohort cities.
+   - **Geolytics NCDB 2020** serves only as an internal cross-check, if
+     institutional access exists.
 
 ### R1 exit criteria
 - Validation battery v1 passes: methodology.md §4.1–4.4, plus the §4.4b 311 checks
@@ -97,7 +107,7 @@ audience. That communication model is what we want to copy.
 | PECOTA element | What it does in baseball | Tract analogue |
 |---|---|---|
 | **Player** / **season** | Unit / time step | Tract / **annual "seasons" for display** (the modeled annual series, plus raw rolling vintages). The **forecast step is a non-overlapping 5-year window** (decennial points for long history). |
-| **Age** and **aging curves** | Players peak and decline on typical curves | **Neighborhood life cycle** (Hoover & Vernon's stages: development → transition → downgrading → thinning → renewal). Proxies: median year built, years since the tract's population took off, housing-stock turnover. Life-cycle curves are the "aging curves". |
+| **Age** and **aging curves** | Players peak and decline on typical curves | **Neighborhood life cycle** (Hoover & Vernon's stages: development → transition → downgrading → thinning → renewal). **Primary age measure: years since urbanization** (HHUUD10 urbanization year, all continental tracts), with median year built and housing-stock turnover as supporting signals. Aging curves are estimated from the 1940–2019 housing trajectories (methodology.md §5.4), and comps can be aligned by neighborhood age as well as by calendar year. |
 | **Position, body type** | Constrain comparable careers | **Facet signature** (urbanity, housing-stock type, metro type and size), used as hard or soft match constraints |
 | **League and park translations** (Davenport) | Put stats from different contexts on one scale | **Regional translation.** Deflate dollars by BEA regional price parities. Express key stats as **metro-relative percentiles**, so a Cleveland tract can comp to a Seattle tract in relative terms. |
 | **Run environment / era adjustment** | League-wide offense shifts by year | **Era adjustment.** Remove national and metro change in each period (post-recession 2009–13→2014–18 vs COVID-era 2014–18→2019–23) before transferring comps' changes, then add back the current era's expectation. |
@@ -134,8 +144,13 @@ audience. That communication model is what we want to copy.
   - Comps come from transitions 2000→2010 (decennial core) and 2009–13→2014–18 (ACS).
   - Targets are tracts at 2014–18.
   - Forecasts of 2019–23 are scored against the actual 2019–23 values.
-- **Second fold**, where long history allows: comps from 1990→2000 forecast
-  2000→2010. Use the core temporal variables only.
+- **Additional long-history folds** (core long-run preset only, methodology.md §5.4):
+  - 1990→2000 comps forecast 2000→2010;
+  - 1980→1990 comps forecast 1990→2000 (LTDB, tracted areas);
+  - housing-units-only folds back to 1940 via HHUUD10.
+
+  Report skill by fold. Earlier folds test era-adjustment robustness. Weight them
+  by interpolation uncertainty.
 - **Anti-leakage rule (overlapping vintages).**
   - The forecast target is always the **next non-overlapping window** (five years
     ahead), never an adjacent overlapping vintage. Predicting 2015–19 from 2014–18
@@ -181,8 +196,12 @@ audience. That communication model is what we want to copy.
    - The forecast fan is anchored at the non-overlapping 5-year horizon.
    - Intermediate years are interpolated from comps' annual paths and visibly
      styled as modeled.
-3. **Life-cycle ("aging") curves:** typical change by life-cycle stage and urbanity,
-   with the target's position marked.
+3. **Life-cycle ("aging") curves:** typical change by **years since urbanization**
+   and urbanity, from 1940–2019 history, with the target's position marked.
+   - A "decades-long career" view shows the target's full available history (H0/H1
+     tiers solid, H3 housing back to 1940 dashed) alongside its comps at the same
+     neighborhood age.
+   - Historical points carry their interpolation bounds.
 4. **Comp map:** a national map of comps colored by similarity, with an inset of
    the target tract.
 5. **Facet radar / parallel coordinates:** the target vs its top comps, in metro-relative percentiles.

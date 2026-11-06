@@ -30,6 +30,40 @@
 | V-13 | HUD ZIP crosswalk is free; Opportunity Atlas is on 2010 tracts | ✅ / 🟡 | The HUD-USPS crosswalk is **free with registration / API key**, quarterly, with a residential ratio, and on 2020 tracts from **2023 Q1** (2010 geographies earlier). The Opportunity Atlas uses 2000/2010 Census-linked data and publishes a 2010↔2020 tract crosswalk, which implies 2010 tract keys (inferred, 🟡). | requirements.md §5.2 |
 | V-14 | The PDB tract file carries a MOE for each ACS estimate | ⏳ | **Not confirmed.** The PDB documentation includes an MOE-calculation appendix, but the column-level MOE coverage and naming were not found. **This is core to methodology.md §4.3**, so a fallback is specified: pull MOEs for the clustering variables from the ACS detailed-table API. | requirements.md R-PDB-3; **Phase 0 spike check** |
 
+## Long-term history sources (2026-11-06 pass)
+
+The MIT historic-census guide (libguides.mit.edu/census/historic) could not be
+fetched directly: the research session's network blocks that host. Its contents
+were reconstructed from search results and the sources it names.
+
+| ID | Assumption | Status | Finding |
+|---|---|---|---|
+| V-15 | NHGIS standardized tract time series | ✅ | 1990, 2000, 2010, 2020 data in **2010 units** at ten levels down to block group. **Short-form (block-published) counts only**: no income or education. Lower and upper bounds are supplied per value. A 2020-unit version was planned (unconfirmed). NHGIS has **no standardized data or crosswalks for tracts before 1990**. |
+| V-16 | LTDB coverage | ✅ | 1970–2020 on 2010 tracts. 2020 limited to race/ethnicity. Many tracts lack 1970/80 values (untracted areas). Errors stem from a "spatial stationarity" assumption. |
+| V-17 | Geolytics NCDB | ✅ | **NCDB 2020**: tract data for 1970–2020, all normalized to **2020 tracts**. Commercial (from about $1,495; NCDB 2010 from about $1,195). Held by university libraries. |
+| V-18 | 1940–1960 tract data | 🟡 | NHGIS has tract boundaries for 1910–2000 and nominal tract tables. Coverage: 1940/50 for a limited set of tracted cities, 1960 for "select areas". Social Explorer 1940–60 tract data is **not** on consistent boundaries (it reallocates 1970+ with LTDB weights). Mostly forum and library-guide sources. |
+| V-19 | HHUUD10 | ✅ | Markley, Holloway, Hafley & Hauer (2022), *Scientific Data* 9:82. Housing units for **72,539 continental 2010 tracts**, every decade 1940–2010 plus 2019, and an **urbanization year** (2035 = non-urban). Out-of-sample validation beats LTDB. Free on OSF and GitHub (snmarkley1/HHUUD10). |
+| V-20 | HOLC redlining on tracts | ✅ | **Historic Redlining Indicator** (renamed from Score, 2023-08-09), openICPSR 141121 **V3**, on 2000/2010/**2020** tracts. Grades A–D become 1–4. Graded metros only: about 13.5k 2020 tracts. Tracts below the 20% graded-area threshold are coded 0 (ungraded). |
+| V-21 | 1940/1950 full-count microdata for tracts | ⚠️ | IPUMS full count has enumeration districts, but ED-level geography is **restricted**. **No public 1950 ED shapefiles** (NARA ED maps are not georeferenced). Deferred. |
+
+Sources: [MIT historic census guide (not fetched)](https://libguides.mit.edu/census/historic) ·
+[PSU historical census guide](https://guides.libraries.psu.edu/uscensus/historical) ·
+[Cornell guide](https://guides.library.cornell.edu/eMHA/USCensusandGovernmentStatistics) ·
+[NHGIS time series tables](https://www.nhgis.org/time-series-tables) ·
+[NHGIS crosswalks](https://www.nhgis.org/geographic-crosswalks) ·
+[PRB forum: NHGIS 2010 tracts](https://acsdatacommunity.prb.org/discussion-forum/f/forum/994/analyzing-data-over-time-across-census-tract-changes/2553) ·
+[IPUMS forum: pre-1990 standardization](https://forum.ipums.org/t/how-are-census-tracts-standardized-across-years/4699) ·
+[IPUMS forum: 1940/1950 tracts](https://forum.ipums.org/t/tract-level-or-neighborhood-level-data-on-race-for-1940-1950/1279) ·
+[Geolytics NCDB](https://geolytics.com/products/normalized-data/neighborhood-change-database) ·
+[NCDB 2020](https://geolytics.com/neighborhood-change-database-2020) ·
+[Social Explorer reallocation](https://socialexplorer.com/blog/post/reallocating-census-data-how-social-explorer-makes-cross-decade-comparisons-possible-9010) ·
+[HHUUD10 paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC8917187) ·
+[HHUUD10 GitHub](https://github.com/snmarkley1/HHUUD10) ·
+[Historic Redlining Indicator](https://www.openicpsr.org/openicpsr/project/141121/version/V3/view) ·
+[NCRC redlining score](https://ncrc.org/redlining-score/) ·
+[IPUMS forum: 1950 ED geography](https://forum.ipums.org/t/sub-county-location-in-1950-full-count-data/6278) ·
+[IPUMS forum: ED boundaries](https://forum.ipums.org/t/where-to-find-boundary-data-for-enumeration-districts/5510)
+
 ## Other assumptions spot-checked (no change needed)
 - **Non-overlapping ACS comparisons:** Census guidance is explicit (see the
   methodology.md references).
@@ -56,6 +90,12 @@
 3. Pull one FHFA tract HPI file. Confirm the vintage, tract count, and 2010 vs 2020 keys.
 4. Check the AlphaEarth dataset license in the Earth Engine catalog.
 5. Confirm whether HUD USPS vacancy access is available to this project (eligibility).
+6. Allow `libguides.mit.edu` in the session network settings and read the MIT
+   historic guide directly. Diff it against methodology.md §5.4 for any sources missed.
+7. Check whether the 2010-unit NHGIS time series now has a 2020-unit version.
+   If it does, it removes one interpolation step for tier H0.
+8. Confirm institutional access to Geolytics NCDB 2020 and Social Explorer, and
+   whether the NCDB license allows internal validation use.
 
 ## Sources
 - ACS geography: [Geography Boundaries by Year (2020)](https://www.census.gov/programs-surveys/acs/geography-acs/geography-boundaries-by-year.2020.html), [Hawaii SDC 2016–2020 release note](https://census.hawaii.gov/?p=9978), [Census 5-year webinar deck](https://www.census.gov/content/dam/Census/newsroom/press-kits/2022/20220310-presentation-acs-5year-webinar.pdf), [Esri: 2016–2020 updated boundaries](https://www.esri.com/arcgis-blog/products/arcgis-living-atlas/mapping/acs-2016-2020-updated-boundaries)
