@@ -187,6 +187,43 @@ Rationale:
 - **Regionalization** (contiguous cohorts, spopt SKATER / max-p) is a separate
   product for *building neighborhoods*, not for finding peers.
 
+### 3.7 Facet architecture (feature cohorts)
+Facets are first-class objects, so users can run quick similarity searches within
+one feature set and still cluster across sets.
+- **Registry** (`config/facets.yaml`): age and household, race/ethnicity (opt-in),
+  income and poverty, education and work, housing stock, **cost of living** (rent,
+  value, burden + BEA regional price parities, HUD FMR/SAFMR, optional family-budget
+  sources, copied down from county/metro), **urbanity** (density, RUCA, footprints,
+  land cover, walkability), commuting, health, environment/hazard, digital,
+  civic/response, jobs/flows.
+  - Each variable has one primary facet, so nothing is double-counted.
+  - Facet coherence is checked by clustering the variables themselves. Variables
+    that track another facet more closely, and facet pairs with r > 0.8, are flagged.
+- **Per facet:**
+  - an embedding of 2–8 dims (transform → PCA/FA → unit total variance);
+  - **distances converted to percentiles**, so "close on income" and "close on
+    urbanity" are comparable despite different intrinsic dimensionality;
+  - a facet cohort (k-means with k = 4–8, or percentile bands if ALT-26 says
+    the facet is one continuous dimension);
+  - a facet-specific external benchmark (urbanity vs NCHS/RUCA; income vs IRS
+    SOI; cost of living vs RPP/FMR; demographics vs decennial counts);
+  - a per-facet MOE stability test.
+- **Rapid similarity:** 85k × ~12 facets × ~5 dims ≈ 5M values, so it is shipped to
+  the browser and searched exhaustively in milliseconds. The combined distance
+  √(Σ w_f·d_f²) is recomputed live, which supports:
+  - **match / ignore / differ** settings per facet (contrast queries such as
+    "same income, but rural");
+  - **conditional** queries (filter by one facet's cohort, rank by another);
+  - **adjusted** facets (e.g. income relative to cost of living).
+- **Across facets:**
+  - the **facet signature** tuple (a browsable faceted typology);
+  - equal-weight concatenation → k-means (the §2 baseline);
+  - LCA on facet labels (meta-cohorts);
+  - multi-view methods (SNF/MOFA, ALT-37);
+  - a **facet relationship** report (correlation between facet embeddings, mutual
+    information between facet labels; "decoupled" tracts such as high income with
+    low cost of living).
+
 ## 4. Validation framework
 
 No single score validates a geodemographic classification, so we use a battery of
@@ -412,6 +449,12 @@ and race.
 feed *scoped* similarity, which runs within one city or region.
 
 ## 7. Experiment plan (Phase 3 of requirements.md)
+
+> **Sequencing:** see [`research_plan.md`](research_plan.md). R1 is the MVP (facets +
+> the E0 k-means baseline). R2 is the tract-level PECOTA (comps-based forecasting,
+> with a worked example and backtest). R3 is alternatives + consensus, judged partly
+> by whether they improve R2 forecast skill. E1–E6 below run in R1 (E0–E1) and R3
+> (E2–E6).
 
 > The wider backlog of candidate methods is in
 > [`methodology_alternatives.md`](methodology_alternatives.md). It covers

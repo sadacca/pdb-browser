@@ -56,6 +56,10 @@ is per-domain PCA (methodology.md §3.3). Alternatives:
 ### B1. Sports analytics
 
 **ALT-12 Player comparables ("comps") and similarity scores**
+> **Promoted:** this is the second step after the k-means baseline. The full
+> design, backtest, and worked example are in `research_plan.md` Phase R2. The
+> entry below is kept for context.
+
 - **Origin:** Bill James's baseball similarity scores (start at 1000, subtract fixed
   points per unit difference in each stat); Silver's PECOTA projections from
   nearest-neighbor career trajectories.

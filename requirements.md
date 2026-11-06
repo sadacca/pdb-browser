@@ -207,7 +207,7 @@ refresh: annual
     precedent).
   - all: winsorize at p1/p99. Missing values: impute with the county median and add a
     missing-indicator flag. Drop features with >20% missing in scope.
-- **R-FEAT-2.** Feature **presets**: "Demographic" (race, age, nativity,
+- **R-FEAT-2.** Feature **presets** (formalized as facets in methodology.md §3.7): "Demographic" (race, age, nativity,
   language), "Economic" (income, poverty, employment, education), "Housing"
   (tenure, value, rent, burden, vacancy, age of stock), "Health & environment"
   (PLACES, EJ, NRI), "Census operations" (LRS, response), plus "Custom" (pick
@@ -366,7 +366,7 @@ python -m pdbb.pipeline --vintage 2025 --stage publish      # upload large artif
 | **0. Spike** | Validate the PDB 2025/2026 URLs and variables. One-state (MD) prototype: PMTiles + MapLibre + DuckDB-WASM on GitHub Pages. | Click a tract → see PDB values, on free hosting, < 3 s load. |
 | **1. Browse MVP** | National tract PDB browse: map, variable picker, dictionary, profile with percentiles and MOE flags, table + export, address search. | Public URL. All ~85k tracts. Mobile usable. |
 | **2. Join framework** | Source-spec + `joins.py` (all 5 join types). P1 federal sources (PLACES, SVI, NRI, Food Atlas, CHAS/QCT, LODES). BYO-CSV upload. | ≥6 sources live with join reports. |
-| **3. Similarity** | Feature store + presets, find-similar with explanations, embedding scatter, typology clusters. | kNN < 1 s national. Explanations shown. |
+| **3. Similarity** | Feature store + facets (methodology.md §3.7), find-similar with explanations, embedding scatter, typology clusters. Then **forecast mode**: tract-level PECOTA comps, cards, and backtest (research_plan.md R2). | kNN < 1 s national. Explanations shown. R2 backtest gates pass. |
 | **4. Municipal/state** | balt311 adapters → 311 per-tract metrics for the cohort cities. MD state sources. Custom roll-ups (CSA). Equity lens. | Baltimore reproduces balt311 tract metrics within tolerance. |
 | **5. Block groups and blocks** | BG layer nationally. Block drill-down (decennial counts) per county. Dasymetric interpolation. | BG browse + similarity live. |
 | **6. Analyst workbench** | Streamlit/HF Space for regionalization, custom embeddings, large BYO joins. | Shares the data product with the static site. |
